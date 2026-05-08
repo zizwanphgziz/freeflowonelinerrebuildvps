@@ -2,7 +2,7 @@
 
 A futuristic web application that provides one-liner VPS OS rebuild scripts for all major Linux distributions and Windows editions. Just SSH into your VPS, copy the script, paste, and your OS rebuilds automatically — zero pre-setup needed.
 
-**Live Site:** [https://vps-rebuild-generator-1wtylodn.devinapps.com](https://vps-rebuild-generator-1wtylodn.devinapps.com)
+**Live Site:** [https://zizwanphgziz.github.io/freeflowonelinerrebuildvps](https://zizwanphgziz.github.io/freeflowonelinerrebuildvps)
 
 ## Supported Operating Systems
 
