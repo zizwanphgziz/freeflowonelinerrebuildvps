@@ -395,11 +395,27 @@ function App() {
     }
   }, [])
 
+  const closeModal = useCallback(() => {
+    setShowModal(false)
+    if (window.history.state?.modal) {
+      window.history.back()
+    }
+  }, [])
+
   const handleSelectOS = (os: OSEntry) => {
     setSelectedOS(os)
     setSelectedVersion(os.versions[0])
     setShowModal(true)
+    window.history.pushState({ modal: true }, '')
   }
+
+  useEffect(() => {
+    const onPopState = () => {
+      setShowModal(false)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   useEffect(() => {
     if (showModal) {
@@ -544,26 +560,34 @@ function App() {
 
       {/* MODAL */}
       {showModal && selectedOS && selectedVersion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="bg-slate-900 border border-slate-700/60 rounded-3xl max-w-2xl w-full p-0 shadow-2xl shadow-black/40 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-slate-800/60 flex items-center justify-between"
-              style={{ background: `linear-gradient(135deg, ${selectedOS.color}15 0%, transparent 60%)` }}>
-              <div className="flex items-center gap-3">
-                <OSIcon os={selectedOS} />
-                <div>
-                  <h3 className="text-xl font-bold text-slate-100">{selectedOS.name}</h3>
-                  <p className="text-sm text-slate-400">{selectedOS.description}</p>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={closeModal}>
+          <div className="min-h-full flex items-start sm:items-center justify-center p-4 py-8">
+            <div className="bg-slate-900 border border-slate-700/60 rounded-3xl max-w-2xl w-full p-0 shadow-2xl shadow-black/40 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-800/60 flex items-center justify-between gap-3"
+                style={{ background: `linear-gradient(135deg, ${selectedOS.color}15 0%, transparent 60%)` }}>
+                <button onClick={closeModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors text-sm font-medium flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <OSIcon os={selectedOS} />
+                  <div className="min-w-0">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-100 truncate">{selectedOS.name}</h3>
+                    <p className="text-xs sm:text-sm text-slate-400 line-clamp-1">{selectedOS.description}</p>
+                  </div>
                 </div>
+                <button onClick={closeModal}
+                  className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-              <button onClick={() => setShowModal(false)}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
 
-            <div className="px-6 pt-5 pb-3">
+            <div className="px-4 sm:px-6 pt-5 pb-3">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">Select Version</label>
               <div className="flex flex-wrap gap-2">
                 {selectedOS.versions.map((v) => (
@@ -578,7 +602,7 @@ function App() {
               </div>
             </div>
 
-            <div className="px-6 pb-6 pt-2">
+            <div className="px-4 sm:px-6 pb-6 pt-2">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">One-Liner Script</label>
               <div className="relative group">
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 pr-14 overflow-x-auto">
@@ -624,6 +648,7 @@ function App() {
                   <span><strong>Warning:</strong> This will completely erase all data on your VPS and reinstall the operating system. Make sure you have backed up any important data before proceeding.</span>
                 </p>
               </div>
+            </div>
             </div>
           </div>
         </div>
