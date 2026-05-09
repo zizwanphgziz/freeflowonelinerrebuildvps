@@ -319,13 +319,48 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     const term = initTerminal()
     if (!term) return
 
+    const pageIsHttps = window.location.protocol === 'https:'
+    const backendIsHttp = backendUrl.startsWith('http://')
+
+    if (pageIsHttps && backendIsHttp) {
+      term.writeln('\x1b[31m>>> ERROR: Mixed content blocked!\x1b[0m')
+      term.writeln('\x1b[33m>>> This page is HTTPS but your backend is HTTP.\x1b[0m')
+      term.writeln('\x1b[33m>>> Browsers block insecure WebSocket (ws://) from HTTPS pages.\x1b[0m')
+      term.writeln('')
+      term.writeln('\x1b[36m>>> Fix: Set up Caddy as HTTPS reverse proxy on your VPS:\x1b[0m')
+      term.writeln('\x1b[37m    apt install -y caddy\x1b[0m')
+      term.writeln('\x1b[37m    echo \'your-domain.com { reverse_proxy localhost:8000 }\' > /etc/caddy/Caddyfile\x1b[0m')
+      term.writeln('\x1b[37m    systemctl restart caddy\x1b[0m')
+      term.writeln('')
+      term.writeln('\x1b[36m>>> Or use your VPS IP directly with Caddy auto-TLS:\x1b[0m')
+      term.writeln('\x1b[37m    apt install -y caddy\x1b[0m')
+      term.writeln('\x1b[37m    caddy reverse-proxy --from :443 --to :8000\x1b[0m')
+      term.writeln('\x1b[33m>>> Then change backend URL to: https://YOUR_VPS_IP\x1b[0m')
+      setConnectionError('Mixed content: HTTPS page cannot connect to HTTP backend. Set up HTTPS on your backend (see terminal for instructions).')
+      setIsConnecting(false)
+      return
+    }
+
     term.writeln('\x1b[36m>>> Connecting to ' + activeHost.host + ':' + activeHost.port + '...\x1b[0m')
 
     const wsUrl = backendUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/ssh'
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
+    let wsConnected = false
+    const connectTimeout = setTimeout(() => {
+      if (!wsConnected) {
+        term.writeln('\x1b[31m>>> Connection timed out. Could not reach backend.\x1b[0m')
+        term.writeln('\x1b[33m>>> Check that the backend is running and port 8000 is open.\x1b[0m')
+        setConnectionError('Connection timed out. Backend not reachable.')
+        setIsConnecting(false)
+        ws.close()
+      }
+    }, 10000)
+
     ws.onopen = () => {
+      wsConnected = true
+      clearTimeout(connectTimeout)
       ws.send(JSON.stringify({
         host: activeHost.host,
         port: activeHost.port,
@@ -365,12 +400,14 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     }
 
     ws.onerror = () => {
+      clearTimeout(connectTimeout)
       term.writeln('\x1b[31m>>> WebSocket connection failed. Check backend URL.\x1b[0m')
       setConnectionError('WebSocket connection failed. Check backend URL.')
       setIsConnecting(false)
     }
 
     ws.onclose = () => {
+      clearTimeout(connectTimeout)
       setIsConnected(false)
       setIsConnecting(false)
       term.writeln('\r\n\x1b[33m>>> Connection closed.\x1b[0m')
