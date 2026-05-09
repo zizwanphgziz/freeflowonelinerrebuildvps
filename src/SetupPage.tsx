@@ -209,7 +209,12 @@ function saveHosts(hosts: SavedHost[]) {
 }
 
 function getBackendUrl(): string {
-  return localStorage.getItem('freeflow-backend-url') || ''
+  const saved = localStorage.getItem('freeflow-backend-url')
+  if (saved) return saved
+  if (window.location.hostname !== 'localhost' && !window.location.hostname.includes('github.io') && !window.location.hostname.includes('devinapps.com')) {
+    return window.location.origin
+  }
+  return ''
 }
 
 function setBackendUrl(url: string) {
