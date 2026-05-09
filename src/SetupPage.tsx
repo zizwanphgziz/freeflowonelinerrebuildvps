@@ -1,0 +1,857 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface SavedHost {
+  id: string
+  label: string
+  host: string
+  port: number
+  username: string
+}
+
+interface ToolCategory {
+  id: string
+  name: string
+  icon: string
+  color: string
+  tools: ToolEntry[]
+}
+
+interface ToolEntry {
+  id: string
+  name: string
+  icon: string
+  description: string
+  script: string
+  warning?: string
+  requiresInput?: { label: string; placeholder: string; key: string }[]
+}
+
+// ─── One-Click Tools Data ────────────────────────────────────────────────────
+
+const toolCategories: ToolCategory[] = [
+  {
+    id: 'os-rebuild',
+    name: 'OS Rebuild',
+    icon: '\u{1F4BF}',
+    color: '#14F5C8',
+    tools: [
+      { id: 'rebuild-debian-13', name: 'Debian 13 Trixie', icon: '\u{1F300}', description: 'Rebuild to Debian 13', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 13 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-debian-12', name: 'Debian 12 Bookworm', icon: '\u{1F300}', description: 'Rebuild to Debian 12', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 12 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-ubuntu-2604', name: 'Ubuntu 26.04', icon: '\u{1F7E0}', description: 'Rebuild to Ubuntu 26.04 LTS', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 26.04 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-ubuntu-2404', name: 'Ubuntu 24.04', icon: '\u{1F7E0}', description: 'Rebuild to Ubuntu 24.04 LTS', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 24.04 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-centos-9', name: 'CentOS 9 Stream', icon: '\u{1F7E3}', description: 'Rebuild to CentOS 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) centos 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-alma-9', name: 'AlmaLinux 9', icon: '\u{1F535}', description: 'Rebuild to AlmaLinux 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alma 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+      { id: 'rebuild-rocky-9', name: 'Rocky Linux 9', icon: '\u{1F7E2}', description: 'Rebuild to Rocky Linux 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) rocky 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
+    ],
+  },
+  {
+    id: 'server-setup',
+    name: 'Server Setup & Hardening',
+    icon: '\u{1F6E1}\u{FE0F}',
+    color: '#F59E0B',
+    tools: [
+      {
+        id: 'swap-1g', name: 'Create 1GB Swap', icon: '\u{1F4BE}',
+        description: 'Create a 1GB swap file for low-RAM VPS',
+        script: 'fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+      },
+      {
+        id: 'swap-2g', name: 'Create 2GB Swap', icon: '\u{1F4BE}',
+        description: 'Create a 2GB swap file',
+        script: 'fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+      },
+      {
+        id: 'swap-4g', name: 'Create 4GB Swap', icon: '\u{1F4BE}',
+        description: 'Create a 4GB swap file',
+        script: 'fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+      },
+      {
+        id: 'timezone', name: 'Set Timezone', icon: '\u{1F570}\u{FE0F}',
+        description: 'Set server timezone (e.g. Asia/Kuala_Lumpur)',
+        script: 'timedatectl set-timezone TIMEZONE_VALUE && timedatectl',
+        requiresInput: [{ label: 'Timezone', placeholder: 'Asia/Kuala_Lumpur', key: 'TIMEZONE_VALUE' }],
+      },
+      {
+        id: 'dns-cloudflare', name: 'DNS: Cloudflare', icon: '\u{1F310}',
+        description: 'Change DNS to Cloudflare (1.1.1.1)',
+        script: 'echo "nameserver 1.1.1.1" > /etc/resolv.conf && echo "nameserver 1.0.0.1" >> /etc/resolv.conf && echo "DNS changed to Cloudflare" && cat /etc/resolv.conf',
+      },
+      {
+        id: 'dns-google', name: 'DNS: Google', icon: '\u{1F310}',
+        description: 'Change DNS to Google (8.8.8.8)',
+        script: 'echo "nameserver 8.8.8.8" > /etc/resolv.conf && echo "nameserver 8.8.4.4" >> /etc/resolv.conf && echo "DNS changed to Google" && cat /etc/resolv.conf',
+      },
+    ],
+  },
+  {
+    id: 'networking',
+    name: 'Networking & Proxy',
+    icon: '\u{1F310}',
+    color: '#3B82F6',
+    tools: [
+      {
+        id: 'install-docker', name: 'Install Docker', icon: '\u{1F433}',
+        description: 'Install Docker + Docker Compose on any distro',
+        script: 'curl -fsSL https://get.docker.com | sh && systemctl enable docker && systemctl start docker && docker --version && docker compose version',
+      },
+      {
+        id: 'install-wireguard', name: 'Install WireGuard', icon: '\u{1F512}',
+        description: 'Install WireGuard VPN server (auto-setup)',
+        script: 'curl -fsSL https://git.io/wireguard -o wireguard-install.sh && bash wireguard-install.sh',
+        warning: 'May conflict with existing VPN setups!',
+      },
+      {
+        id: 'install-nginx', name: 'Install Nginx', icon: '\u{1F4E6}',
+        description: 'Install and start Nginx reverse proxy',
+        script: 'apt-get update -y && apt-get install -y nginx && systemctl enable nginx && systemctl start nginx && nginx -v && echo "Nginx installed and running!"',
+      },
+    ],
+  },
+  {
+    id: 'diagnostics',
+    name: 'Diagnostics & Monitoring',
+    icon: '\u{1F50D}',
+    color: '#8B5CF6',
+    tools: [
+      {
+        id: 'speedtest', name: 'Speedtest', icon: '\u{26A1}',
+        description: 'Run network speed test on your VPS',
+        script: 'curl -fsSL https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3',
+      },
+      {
+        id: 'benchmark', name: 'YABS Benchmark', icon: '\u{1F4CA}',
+        description: 'Full VPS benchmark (CPU, disk, network)',
+        script: 'curl -fsSL https://yabs.sh | bash',
+      },
+      {
+        id: 'sysinfo', name: 'System Info', icon: '\u{1F4CB}',
+        description: 'Show full VPS specs and system info',
+        script: 'echo "=== SYSTEM INFO ===" && echo "Hostname: $(hostname)" && echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\")" && echo "Kernel: $(uname -r)" && echo "CPU: $(grep "model name" /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)" && echo "Cores: $(nproc)" && echo "RAM: $(free -h | grep Mem | awk \'{print $2}\')" && echo "Disk: $(df -h / | tail -1 | awk \'{print $2, "total,", $3, "used,", $4, "available"}\')" && echo "IP: $(curl -s4 ifconfig.me)" && echo "Uptime: $(uptime -p)"',
+      },
+      {
+        id: 'disk-usage', name: 'Disk Usage', icon: '\u{1F4C0}',
+        description: 'Show top space-consuming directories',
+        script: 'echo "=== TOP 15 LARGEST DIRECTORIES ===" && du -sh /* 2>/dev/null | sort -rh | head -15',
+      },
+      {
+        id: 'port-scan', name: 'Open Ports', icon: '\u{1F50C}',
+        description: 'List all open/listening ports on the server',
+        script: 'ss -tlnp | head -30',
+      },
+    ],
+  },
+  {
+    id: 'apps',
+    name: 'Application Installers',
+    icon: '\u{1F4E6}',
+    color: '#EC4899',
+    tools: [
+      {
+        id: 'install-mysql', name: 'Install MySQL', icon: '\u{1F5C3}\u{FE0F}',
+        description: 'Install MySQL database server',
+        script: 'apt-get update -y && apt-get install -y mysql-server && systemctl enable mysql && systemctl start mysql && mysql --version',
+      },
+      {
+        id: 'install-postgres', name: 'Install PostgreSQL', icon: '\u{1F418}',
+        description: 'Install PostgreSQL database server',
+        script: 'apt-get update -y && apt-get install -y postgresql postgresql-contrib && systemctl enable postgresql && systemctl start postgresql && psql --version',
+      },
+      {
+        id: 'install-redis', name: 'Install Redis', icon: '\u{1F534}',
+        description: 'Install Redis in-memory data store',
+        script: 'apt-get update -y && apt-get install -y redis-server && systemctl enable redis-server && systemctl start redis-server && redis-cli ping',
+      },
+      {
+        id: 'install-nodejs', name: 'Install Node.js LTS', icon: '\u{1F7E2}',
+        description: 'Install latest Node.js LTS via nvm',
+        script: 'curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm install --lts && node --version && npm --version',
+      },
+    ],
+  },
+  {
+    id: 'backup',
+    name: 'Backup & Recovery',
+    icon: '\u{1F4BE}',
+    color: '#10B981',
+    tools: [
+      {
+        id: 'backup-etc', name: 'Backup /etc', icon: '\u{1F4C1}',
+        description: 'Backup all config files to /root/backup-etc.tar.gz',
+        script: 'tar -czf /root/backup-etc-$(date +%Y%m%d).tar.gz /etc/ && echo "Backup created: /root/backup-etc-$(date +%Y%m%d).tar.gz" && ls -lh /root/backup-etc-*.tar.gz',
+      },
+      {
+        id: 'backup-home', name: 'Backup /home', icon: '\u{1F3E0}',
+        description: 'Backup all home directories',
+        script: 'tar -czf /root/backup-home-$(date +%Y%m%d).tar.gz /home/ && echo "Backup created: /root/backup-home-$(date +%Y%m%d).tar.gz" && ls -lh /root/backup-home-*.tar.gz',
+      },
+    ],
+  },
+]
+
+// ─── LocalStorage helpers ────────────────────────────────────────────────────
+
+function loadHosts(): SavedHost[] {
+  try {
+    const raw = localStorage.getItem('freeflow-hosts')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveHosts(hosts: SavedHost[]) {
+  localStorage.setItem('freeflow-hosts', JSON.stringify(hosts))
+}
+
+function getBackendUrl(): string {
+  return localStorage.getItem('freeflow-backend-url') || ''
+}
+
+function setBackendUrl(url: string) {
+  localStorage.setItem('freeflow-backend-url', url)
+}
+
+// ─── SetupPage Component ────────────────────────────────────────────────────
+
+export default function SetupPage({ onBack }: { onBack: () => void }) {
+  const [hosts, setHosts] = useState<SavedHost[]>(loadHosts)
+  const [activeHost, setActiveHost] = useState<SavedHost | null>(null)
+  const [password, setPassword] = useState('')
+  const [privateKey, setPrivateKey] = useState('')
+  const [authMode, setAuthMode] = useState<'password' | 'key'>('password')
+  const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [connectionError, setConnectionError] = useState('')
+  const [showAddHost, setShowAddHost] = useState(false)
+  const [editingHost, setEditingHost] = useState<SavedHost | null>(null)
+  const [newHost, setNewHost] = useState({ label: '', host: '', port: '22', username: 'root' })
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [toolSearch, setToolSearch] = useState('')
+  const [confirmTool, setConfirmTool] = useState<ToolEntry | null>(null)
+  const [toolInputs, setToolInputs] = useState<Record<string, string>>({})
+  const [backendUrl, setBackendUrlState] = useState(getBackendUrl)
+  const [showSettings, setShowSettings] = useState(false)
+
+  const terminalRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitAddonRef = useRef<FitAddon | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+
+  // Save hosts to localStorage whenever they change
+  useEffect(() => { saveHosts(hosts) }, [hosts])
+
+  // Cleanup terminal on unmount
+  useEffect(() => {
+    return () => {
+      wsRef.current?.close()
+      termRef.current?.dispose()
+    }
+  }, [])
+
+  // Resize terminal on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (fitAddonRef.current && isConnected) {
+        fitAddonRef.current.fit()
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [isConnected])
+
+  const initTerminal = useCallback(() => {
+    if (!terminalRef.current) return
+
+    if (termRef.current) {
+      termRef.current.dispose()
+    }
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+      theme: {
+        background: '#0B1222',
+        foreground: '#E2E8F0',
+        cursor: '#14F5C8',
+        cursorAccent: '#0B1222',
+        selectionBackground: '#14F5C833',
+        black: '#1E293B',
+        red: '#F87171',
+        green: '#14F5C8',
+        yellow: '#FBBF24',
+        blue: '#60A5FA',
+        magenta: '#C084FC',
+        cyan: '#22D3EE',
+        white: '#F1F5F9',
+        brightBlack: '#475569',
+        brightRed: '#FCA5A5',
+        brightGreen: '#6EE7B7',
+        brightYellow: '#FDE68A',
+        brightBlue: '#93C5FD',
+        brightMagenta: '#D8B4FE',
+        brightCyan: '#67E8F9',
+        brightWhite: '#F8FAFC',
+      },
+    })
+
+    const fitAddon = new FitAddon()
+    term.loadAddon(fitAddon)
+    term.open(terminalRef.current)
+    setTimeout(() => fitAddon.fit(), 100)
+
+    termRef.current = term
+    fitAddonRef.current = fitAddon
+    return term
+  }, [])
+
+  const connectSSH = useCallback(() => {
+    if (!activeHost || !backendUrl) return
+
+    setIsConnecting(true)
+    setConnectionError('')
+
+    const term = initTerminal()
+    if (!term) return
+
+    term.writeln('\x1b[36m>>> Connecting to ' + activeHost.host + ':' + activeHost.port + '...\x1b[0m')
+
+    const wsUrl = backendUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/ssh'
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        host: activeHost.host,
+        port: activeHost.port,
+        username: activeHost.username,
+        password: authMode === 'password' ? password : '',
+        privateKey: authMode === 'key' ? privateKey : '',
+      }))
+    }
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data)
+      switch (msg.type) {
+        case 'output':
+          term.write(msg.data)
+          break
+        case 'connected':
+          setIsConnected(true)
+          setIsConnecting(false)
+          term.writeln('\x1b[32m>>> Connected! Terminal ready.\x1b[0m\r\n')
+          setTimeout(() => fitAddonRef.current?.fit(), 200)
+          term.onData((data) => {
+            ws.send(JSON.stringify({ type: 'input', data }))
+          })
+          term.onResize(({ cols, rows }) => {
+            ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+          })
+          break
+        case 'status':
+          term.writeln('\x1b[33m>>> ' + msg.data + '\x1b[0m')
+          break
+        case 'error':
+          term.writeln('\x1b[31m>>> Error: ' + msg.data + '\x1b[0m')
+          setConnectionError(msg.data)
+          setIsConnecting(false)
+          break
+      }
+    }
+
+    ws.onerror = () => {
+      term.writeln('\x1b[31m>>> WebSocket connection failed. Check backend URL.\x1b[0m')
+      setConnectionError('WebSocket connection failed. Check backend URL.')
+      setIsConnecting(false)
+    }
+
+    ws.onclose = () => {
+      setIsConnected(false)
+      setIsConnecting(false)
+      term.writeln('\r\n\x1b[33m>>> Connection closed.\x1b[0m')
+    }
+  }, [activeHost, password, privateKey, authMode, backendUrl, initTerminal])
+
+  const disconnect = useCallback(() => {
+    wsRef.current?.close()
+    setIsConnected(false)
+    setIsConnecting(false)
+  }, [])
+
+  const executeCommand = useCallback((script: string) => {
+    if (wsRef.current && isConnected) {
+      wsRef.current.send(JSON.stringify({ type: 'execute', data: script }))
+      setConfirmTool(null)
+    }
+  }, [isConnected])
+
+  const addHost = () => {
+    const host: SavedHost = {
+      id: Date.now().toString(),
+      label: newHost.label || newHost.host,
+      host: newHost.host,
+      port: parseInt(newHost.port) || 22,
+      username: newHost.username || 'root',
+    }
+    setHosts([...hosts, host])
+    setNewHost({ label: '', host: '', port: '22', username: 'root' })
+    setShowAddHost(false)
+  }
+
+  const updateHost = () => {
+    if (!editingHost) return
+    setHosts(hosts.map((h) => (h.id === editingHost.id ? editingHost : h)))
+    setEditingHost(null)
+  }
+
+  const deleteHost = (id: string) => {
+    setHosts(hosts.filter((h) => h.id !== id))
+    if (activeHost?.id === id) {
+      setActiveHost(null)
+      disconnect()
+    }
+  }
+
+  const filteredTools = toolCategories
+    .map((cat) => ({
+      ...cat,
+      tools: cat.tools.filter(
+        (t) =>
+          (!selectedCategory || cat.id === selectedCategory) &&
+          (!toolSearch ||
+            t.name.toLowerCase().includes(toolSearch.toLowerCase()) ||
+            t.description.toLowerCase().includes(toolSearch.toLowerCase()))
+      ),
+    }))
+    .filter((cat) => cat.tools.length > 0)
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-slate-800/60 backdrop-blur-xl bg-slate-950/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors text-sm font-medium">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Home
+            </button>
+            <div>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent">
+                One-Clicked VPS Setup
+              </h1>
+              <p className="text-xs text-slate-500 hidden sm:block">Connect & execute with one click</p>
+            </div>
+          </div>
+          <button onClick={() => setShowSettings(!showSettings)}
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-100 mb-4">Backend Settings</h3>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">SSH Proxy Backend URL</label>
+            <input
+              type="text"
+              value={backendUrl}
+              onChange={(e) => { setBackendUrlState(e.target.value); setBackendUrl(e.target.value) }}
+              placeholder="https://your-backend-url.fly.dev"
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
+            />
+            <p className="text-xs text-slate-500 mt-2">The FastAPI SSH proxy server URL. Required for SSH connections.</p>
+            <button onClick={() => setShowSettings(false)}
+              className="mt-4 w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg transition-all">
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          {/* LEFT PANEL: Host Manager */}
+          <div className="lg:col-span-3">
+            <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                  </svg>
+                  Saved Hosts
+                </h2>
+                <button onClick={() => setShowAddHost(true)}
+                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Host List */}
+              <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+                {hosts.length === 0 && (
+                  <p className="text-xs text-slate-500 text-center py-4">No saved hosts yet.<br />Click + to add one.</p>
+                )}
+                {hosts.map((h) => (
+                  <div key={h.id}
+                    className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-all ${activeHost?.id === h.id ? 'bg-emerald-500/10 border border-emerald-500/30' : 'hover:bg-slate-800/50 border border-transparent'}`}
+                    onClick={() => { setActiveHost(h); if (isConnected) disconnect() }}>
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${activeHost?.id === h.id && isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-200 truncate">{h.label}</p>
+                      <p className="text-xs text-slate-500 truncate">{h.username}@{h.host}:{h.port}</p>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); setEditingHost({ ...h }) }}
+                        className="p-1 rounded text-slate-500 hover:text-cyan-400">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteHost(h.id) }}
+                        className="p-1 rounded text-slate-500 hover:text-red-400">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Host Form */}
+              {showAddHost && (
+                <div className="p-3 border-t border-slate-800/60 space-y-2">
+                  <input type="text" placeholder="Label (e.g. My VPS)" value={newHost.label}
+                    onChange={(e) => setNewHost({ ...newHost, label: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  <input type="text" placeholder="Host / IP" value={newHost.host}
+                    onChange={(e) => setNewHost({ ...newHost, host: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="Port" value={newHost.port}
+                      onChange={(e) => setNewHost({ ...newHost, port: e.target.value })}
+                      className="w-20 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                    <input type="text" placeholder="Username" value={newHost.username}
+                      onChange={(e) => setNewHost({ ...newHost, username: e.target.value })}
+                      className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={addHost} disabled={!newHost.host}
+                      className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/30 transition-colors disabled:opacity-40">
+                      Save Host
+                    </button>
+                    <button onClick={() => setShowAddHost(false)}
+                      className="px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-sm hover:bg-slate-700 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Host Modal */}
+              {editingHost && (
+                <div className="p-3 border-t border-slate-800/60 space-y-2">
+                  <p className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Edit Host</p>
+                  <input type="text" placeholder="Label" value={editingHost.label}
+                    onChange={(e) => setEditingHost({ ...editingHost, label: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50" />
+                  <input type="text" placeholder="Host / IP" value={editingHost.host}
+                    onChange={(e) => setEditingHost({ ...editingHost, host: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50" />
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="Port" value={editingHost.port}
+                      onChange={(e) => setEditingHost({ ...editingHost, port: parseInt(e.target.value) || 22 })}
+                      className="w-20 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50" />
+                    <input type="text" placeholder="Username" value={editingHost.username}
+                      onChange={(e) => setEditingHost({ ...editingHost, username: e.target.value })}
+                      className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={updateHost}
+                      className="flex-1 px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 text-sm font-semibold hover:bg-cyan-500/30 transition-colors">
+                      Update
+                    </button>
+                    <button onClick={() => setEditingHost(null)}
+                      className="px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-sm hover:bg-slate-700 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Connection Panel */}
+              {activeHost && !isConnected && (
+                <div className="p-3 border-t border-slate-800/60 space-y-2">
+                  <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                    Connect to {activeHost.label}
+                  </p>
+
+                  {!backendUrl && (
+                    <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-900/30">
+                      <p className="text-xs text-amber-400">Set backend URL in settings first!</p>
+                    </div>
+                  )}
+
+                  <div className="flex bg-slate-800 rounded-lg p-0.5">
+                    <button onClick={() => setAuthMode('password')}
+                      className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMode === 'password' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500'}`}>
+                      Password
+                    </button>
+                    <button onClick={() => setAuthMode('key')}
+                      className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMode === 'key' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500'}`}>
+                      SSH Key
+                    </button>
+                  </div>
+
+                  {authMode === 'password' ? (
+                    <input type="password" placeholder="Password" value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  ) : (
+                    <textarea placeholder="Paste private key here..." value={privateKey}
+                      onChange={(e) => setPrivateKey(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 font-mono text-xs resize-none" />
+                  )}
+
+                  {connectionError && (
+                    <p className="text-xs text-red-400">{connectionError}</p>
+                  )}
+
+                  <button onClick={connectSSH}
+                    disabled={isConnecting || !backendUrl || (!password && !privateKey)}
+                    className="w-full px-3 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                    {isConnecting ? 'Connecting...' : 'Connect'}
+                  </button>
+                </div>
+              )}
+
+              {/* Connected status */}
+              {activeHost && isConnected && (
+                <div className="p-3 border-t border-slate-800/60">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <p className="text-xs font-semibold text-emerald-400">Connected to {activeHost.label}</p>
+                  </div>
+                  <button onClick={disconnect}
+                    className="w-full px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors border border-red-500/20">
+                    Disconnect
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* MIDDLE/RIGHT: Terminal + Tools */}
+          <div className="lg:col-span-9 space-y-6">
+
+            {/* Terminal */}
+            <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-500/60" />
+                    <div className="w-3 h-3 rounded-full bg-amber-500/60" />
+                    <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
+                  </div>
+                  <span className="text-xs font-mono text-slate-500 ml-2">
+                    {isConnected && activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
+                  </span>
+                </div>
+                {isConnected && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    LIVE
+                  </div>
+                )}
+              </div>
+              <div
+                ref={terminalRef}
+                className="bg-[#0B1222] min-h-[300px] sm:min-h-[400px]"
+                style={{ padding: isConnected ? '0' : '16px' }}
+              >
+                {!isConnected && !isConnecting && (
+                  <div className="flex flex-col items-center justify-center h-[300px] sm:h-[400px] text-center">
+                    <svg className="w-16 h-16 text-slate-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-slate-500 text-sm mb-2">No active connection</p>
+                    <p className="text-slate-600 text-xs max-w-xs">
+                      {hosts.length === 0
+                        ? 'Add a host from the left panel, then connect to start using one-click tools.'
+                        : 'Select a host and connect to start using one-click tools.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* One-Click Tools */}
+            <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-800/60">
+                <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-3">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  One-Click Tools
+                  {!isConnected && <span className="text-xs text-slate-600 font-normal ml-1">(connect to VPS first)</span>}
+                </h2>
+
+                {/* Category filter */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <button onClick={() => setSelectedCategory(null)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${!selectedCategory ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-transparent hover:text-slate-300'}`}>
+                    All
+                  </button>
+                  {toolCategories.map((cat) => (
+                    <button key={cat.id} onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${selectedCategory === cat.id ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-transparent hover:text-slate-300'}`}>
+                      {cat.icon} {cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <input type="text" placeholder="Search tools..." value={toolSearch}
+                    onChange={(e) => setToolSearch(e.target.value)}
+                    className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-800 border border-slate-700/50 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="p-3 space-y-4 max-h-[500px] overflow-y-auto">
+                {filteredTools.map((cat) => (
+                  <div key={cat.id}>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <span>{cat.icon}</span> {cat.name}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {cat.tools.map((tool) => (
+                        <button key={tool.id}
+                          onClick={() => {
+                            if (!isConnected) return
+                            if (tool.warning || tool.requiresInput) {
+                              setConfirmTool(tool)
+                              setToolInputs({})
+                            } else {
+                              executeCommand(tool.script)
+                            }
+                          }}
+                          disabled={!isConnected}
+                          className={`group flex items-start gap-3 p-3 rounded-xl border transition-all text-left ${isConnected ? 'border-slate-800/60 hover:border-emerald-500/30 hover:bg-slate-800/40 cursor-pointer' : 'border-slate-800/30 opacity-50 cursor-not-allowed'}`}>
+                          <span className="text-lg flex-shrink-0 mt-0.5">{tool.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors truncate">{tool.name}</p>
+                            <p className="text-xs text-slate-500 line-clamp-2">{tool.description}</p>
+                          </div>
+                          {isConnected && (
+                            <svg className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 flex-shrink-0 mt-1 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tool Confirmation Modal */}
+      {confirmTool && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmTool(null)}>
+          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">{confirmTool.icon}</span>
+              <div>
+                <h3 className="text-lg font-bold text-slate-100">{confirmTool.name}</h3>
+                <p className="text-sm text-slate-400">{confirmTool.description}</p>
+              </div>
+            </div>
+
+            {confirmTool.requiresInput && (
+              <div className="space-y-3 mb-4">
+                {confirmTool.requiresInput.map((input) => (
+                  <div key={input.key}>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">{input.label}</label>
+                    <input type="text" placeholder={input.placeholder}
+                      value={toolInputs[input.key] || ''}
+                      onChange={(e) => setToolInputs({ ...toolInputs, [input.key]: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {confirmTool.warning && (
+              <div className="p-3 rounded-xl bg-red-950/30 border border-red-900/30 mb-4">
+                <p className="text-xs text-red-400 flex items-start gap-2">
+                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span><strong>Warning:</strong> {confirmTool.warning}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-4 overflow-x-auto">
+              <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap break-all">
+                <code>{(() => {
+                  let s = confirmTool.script
+                  if (confirmTool.requiresInput) {
+                    for (const input of confirmTool.requiresInput) {
+                      s = s.replace(input.key, toolInputs[input.key] || input.placeholder)
+                    }
+                  }
+                  return s
+                })()}</code>
+              </pre>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => {
+                let script = confirmTool.script
+                if (confirmTool.requiresInput) {
+                  for (const input of confirmTool.requiresInput) {
+                    script = script.replace(input.key, toolInputs[input.key] || '')
+                  }
+                }
+                executeCommand(script)
+              }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg transition-all">
+                Execute
+              </button>
+              <button onClick={() => setConfirmTool(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-400 text-sm font-semibold hover:bg-slate-700 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
+import SetupPage from './SetupPage'
 
 interface OSVersion {
   version: string
@@ -369,6 +370,11 @@ function App() {
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'linux' | 'windows'>('linux')
   const [showModal, setShowModal] = useState(false)
+  const [currentPage, setCurrentPage] = useState<'home' | 'setup'>('home')
+
+  if (currentPage === 'setup') {
+    return <SetupPage onBack={() => setCurrentPage('home')} />
+  }
 
   const filteredOS = osData.filter(
     (os) =>
@@ -440,6 +446,10 @@ function App() {
             <a href="#scripts" className="text-slate-300 hover:text-emerald-400 transition-colors">Scripts</a>
             <a href="#how" className="text-slate-300 hover:text-emerald-400 transition-colors">How It Works</a>
             <a href="#faq" className="text-slate-300 hover:text-emerald-400 transition-colors">FAQ</a>
+            <button onClick={() => setCurrentPage('setup')}
+              className="px-5 py-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-cyan-500/25 transition-all">
+              One-Click Setup
+            </button>
             <a href="https://github.com/zizwanphgziz/freeflowonelinerrebuildvps" target="_blank" rel="noopener noreferrer"
               className="px-5 py-2 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/25 transition-all">
               GitHub
@@ -472,6 +482,10 @@ function App() {
           <a href="#scripts" className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-base hover:shadow-xl hover:shadow-emerald-500/20 transition-all hover:scale-105">
             Browse Scripts
           </a>
+          <button onClick={() => setCurrentPage('setup')}
+            className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-base hover:shadow-xl hover:shadow-cyan-500/20 transition-all hover:scale-105">
+            One-Click VPS Setup
+          </button>
           <a href="#how" className="px-8 py-3.5 rounded-xl border border-slate-700 text-slate-300 font-semibold text-base hover:bg-slate-800/50 transition-all">
             How It Works
           </a>
