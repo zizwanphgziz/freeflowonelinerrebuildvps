@@ -372,18 +372,6 @@ function App() {
   const [showModal, setShowModal] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'setup'>('home')
 
-  if (currentPage === 'setup') {
-    return <SetupPage onBack={() => setCurrentPage('home')} />
-  }
-
-  const filteredOS = osData.filter(
-    (os) =>
-      os.category === activeTab &&
-      (os.name.toLowerCase().includes(search.toLowerCase()) ||
-        os.versions.some((v) => v.version.toLowerCase().includes(search.toLowerCase())) ||
-        os.versions.some((v) => (v.codename || '').toLowerCase().includes(search.toLowerCase())))
-  )
-
   const handleCopy = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -408,13 +396,6 @@ function App() {
     }
   }, [])
 
-  const handleSelectOS = (os: OSEntry) => {
-    setSelectedOS(os)
-    setSelectedVersion(os.versions[0])
-    setShowModal(true)
-    window.history.pushState({ modal: true }, '')
-  }
-
   useEffect(() => {
     const onPopState = () => {
       setShowModal(false)
@@ -431,6 +412,25 @@ function App() {
     }
     return () => { document.body.style.overflow = '' }
   }, [showModal])
+
+  if (currentPage === 'setup') {
+    return <SetupPage onBack={() => setCurrentPage('home')} />
+  }
+
+  const filteredOS = osData.filter(
+    (os) =>
+      os.category === activeTab &&
+      (os.name.toLowerCase().includes(search.toLowerCase()) ||
+        os.versions.some((v) => v.version.toLowerCase().includes(search.toLowerCase())) ||
+        os.versions.some((v) => (v.codename || '').toLowerCase().includes(search.toLowerCase())))
+  )
+
+  const handleSelectOS = (os: OSEntry) => {
+    setSelectedOS(os)
+    setSelectedVersion(os.versions[0])
+    setShowModal(true)
+    window.history.pushState({ modal: true }, '')
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 relative">
