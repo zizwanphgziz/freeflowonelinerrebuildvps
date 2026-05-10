@@ -242,12 +242,14 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [backendUrl, setBackendUrlState] = useState(getBackendUrl)
   const [showSettings, setShowSettings] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [ctrlActive, setCtrlActive] = useState(false)
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const ctrlActiveRef = useRef(false)
 
   // Save hosts to localStorage whenever they change
   useEffect(() => { saveHosts(hosts) }, [hosts])
@@ -293,26 +295,59 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     }
   }, [isFullscreen, isConnected])
 
+  // Toggle Ctrl modifier
+  const toggleCtrl = () => {
+    const next = !ctrlActive
+    setCtrlActive(next)
+    ctrlActiveRef.current = next
+    termRef.current?.focus()
+  }
+
   // Send special key to terminal
   const sendSpecialKey = (key: string) => {
     if (!termRef.current || !isConnected) return
     termRef.current.focus()
     switch (key) {
-      case 'Ctrl': return // handled as modifier
-      case 'Tab': wsRef.current?.send('\t'); break
-      case 'Esc': wsRef.current?.send('\x1b'); break
-      case 'Up': wsRef.current?.send('\x1b[A'); break
-      case 'Down': wsRef.current?.send('\x1b[B'); break
-      case 'Left': wsRef.current?.send('\x1b[C'); break
-      case 'Right': wsRef.current?.send('\x1b[D'); break
-      case 'Ctrl+C': wsRef.current?.send('\x03'); break
-      case 'Ctrl+D': wsRef.current?.send('\x04'); break
-      case 'Ctrl+Z': wsRef.current?.send('\x1a'); break
-      case 'Ctrl+L': wsRef.current?.send('\x0c'); break
-      case 'Ctrl+A': wsRef.current?.send('\x01'); break
-      case 'Ctrl+E': wsRef.current?.send('\x05'); break
-      default: wsRef.current?.send(key)
+      case 'Tab': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\t' })); break
+      case 'Esc': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b' })); break
+      case 'Up': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[A' })); break
+      case 'Down': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[B' })); break
+      case 'Left': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[C' })); break
+      case 'Right': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[D' })); break
+      case '-': wsRef.current?.send(JSON.stringify({ type: 'input', data: '-' })); break
+      case '/': wsRef.current?.send(JSON.stringify({ type: 'input', data: '/' })); break
+      case '|': wsRef.current?.send(JSON.stringify({ type: 'input', data: '|' })); break
+      case '\\': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\\' })); break
+      default: wsRef.current?.send(JSON.stringify({ type: 'input', data: key })); break
     }
+  }
+
+  // Copy selected text from terminal
+  const copySelection = () => {
+    if (!termRef.current) return
+    const sel = termRef.current.getSelection()
+    if (sel) {
+      navigator.clipboard.writeText(sel)
+    }
+  }
+
+  // Select all terminal content
+  const selectAll = () => {
+    if (!termRef.current) return
+    termRef.current.selectAll()
+  }
+
+  // Paste from clipboard
+  const pasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text && wsRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'input', data: text }))
+      }
+    } catch {
+      // clipboard access denied
+    }
+    termRef.current?.focus()
   }
 
   const initTerminal = useCallback(() => {
@@ -433,6 +468,15 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           term.writeln('\x1b[32m>>> Connected! Terminal ready.\x1b[0m\r\n')
           setTimeout(() => fitAddonRef.current?.fit(), 200)
           term.onData((data) => {
+            if (ctrlActiveRef.current && data.length === 1) {
+              const code = data.toUpperCase().charCodeAt(0) - 64
+              if (code >= 1 && code <= 26) {
+                ws.send(JSON.stringify({ type: 'input', data: String.fromCharCode(code) }))
+                ctrlActiveRef.current = false
+                setCtrlActive(false)
+                return
+              }
+            }
             ws.send(JSON.stringify({ type: 'input', data }))
           })
           term.onResize(({ cols, rows }) => {
@@ -473,7 +517,15 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
 
   const executeCommand = useCallback((script: string) => {
     if (wsRef.current && isConnected) {
-      wsRef.current.send(JSON.stringify({ type: 'execute', data: script }))
+      // Send Ctrl+C to break out of any running menu/prompt
+      wsRef.current.send(JSON.stringify({ type: 'input', data: '\x03' }))
+      setTimeout(() => {
+        wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x03' }))
+      }, 100)
+      // Wait, then execute the command
+      setTimeout(() => {
+        wsRef.current?.send(JSON.stringify({ type: 'execute', data: script }))
+      }, 500)
       setConfirmTool(null)
     }
   }, [isConnected])
@@ -750,34 +802,37 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           {/* MIDDLE/RIGHT: Terminal + Tools */}
           <div className="lg:col-span-9 space-y-6">
 
-            {/* Terminal (inline view) */}
+            {/* Terminal Status Card */}
             <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-500/60" />
-                    <div className="w-3 h-3 rounded-full bg-amber-500/60" />
-                    <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
-                  </div>
-                  <span className="text-xs font-mono text-slate-500 ml-2">
-                    {isConnected && activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
-                  </span>
+              <div className="px-4 py-3 border-b border-slate-800/60 flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-500/60" />
+                  <div className="w-3 h-3 rounded-full bg-amber-500/60" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
                 </div>
-                {isConnected && (
-                  <button onClick={() => setIsFullscreen(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold transition-colors border border-emerald-500/20">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-                    Fullscreen
-                  </button>
-                )}
+                <span className="text-xs font-mono text-slate-500 ml-2">terminal</span>
               </div>
-              <div
-                ref={terminalRef}
-                className="bg-[#0B1222] min-h-[300px] sm:min-h-[400px]"
-                style={{ padding: isConnected ? '0' : '16px' }}
-              >
-                {!isConnected && !isConnecting && (
-                  <div className="flex flex-col items-center justify-center h-[300px] sm:h-[400px] text-center">
+              <div className="bg-[#0B1222] p-6">
+                {isConnected && activeHost ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+                      <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+                    </div>
+                    <p className="text-emerald-400 text-sm font-semibold mb-1">Successfully Connected</p>
+                    <p className="text-slate-400 text-xs font-mono mb-6">{activeHost.username}@{activeHost.host}:{activeHost.port}</p>
+                    <button onClick={() => setIsFullscreen(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/20 transition-all">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                      View Terminal in Fullscreen
+                    </button>
+                  </div>
+                ) : isConnecting ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-8 h-8 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin mb-4" />
+                    <p className="text-slate-400 text-sm">Connecting...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
                     <svg className="w-16 h-16 text-slate-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -790,6 +845,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                   </div>
                 )}
               </div>
+              {/* Hidden terminal container for xterm initialization */}
+              <div ref={terminalRef} className="h-0 overflow-hidden" />
             </div>
 
             {/* One-Click Tools */}
@@ -839,12 +896,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                         <button key={tool.id}
                           onClick={() => {
                             if (!isConnected) return
-                            if (tool.warning || tool.requiresInput) {
-                              setConfirmTool(tool)
-                              setToolInputs({})
-                            } else {
-                              executeCommand(tool.script)
-                            }
+                            setConfirmTool(tool)
+                            setToolInputs({})
                           }}
                           disabled={!isConnected}
                           className={`group flex items-start gap-3 p-3 rounded-xl border transition-all text-left ${isConnected ? 'border-slate-800/60 hover:border-emerald-500/30 hover:bg-slate-800/40 cursor-pointer' : 'border-slate-800/30 opacity-50 cursor-not-allowed'}`}>
@@ -872,7 +925,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
       {/* Fullscreen Terminal Overlay */}
       {isFullscreen && (
         <div className="fixed inset-0 z-[60] bg-[#0B1222] flex flex-col">
-          {/* Fullscreen header bar - minimal like Termius */}
+          {/* Fullscreen header bar */}
           <div className="flex items-center justify-between px-2 py-1.5 bg-slate-900/95 border-b border-slate-800/40 flex-shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -880,34 +933,80 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 {activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
               </span>
             </div>
-            <button onClick={() => setIsFullscreen(false)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Close fullscreen">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Clipboard actions */}
+              <button onClick={selectAll}
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Select All">
+                Select
+              </button>
+              <button onClick={copySelection}
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Copy">
+                Copy
+              </button>
+              <button onClick={pasteClipboard}
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Paste">
+                Paste
+              </button>
+              <button onClick={() => setIsFullscreen(false)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors ml-1" title="Close fullscreen">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
           </div>
           {/* Fullscreen terminal body */}
           <div ref={fullscreenTermRef} className="flex-1 overflow-hidden" />
-          {/* Keyboard toolbar - Termius-style special keys */}
-          <div className="flex items-center gap-0.5 px-1 py-1 bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0 overflow-x-auto">
-            {[
-              { label: 'Esc', key: 'Esc' },
-              { label: 'Tab', key: 'Tab' },
-              { label: 'Ctrl+C', key: 'Ctrl+C' },
-              { label: 'Ctrl+D', key: 'Ctrl+D' },
-              { label: 'Ctrl+Z', key: 'Ctrl+Z' },
-              { label: 'Ctrl+L', key: 'Ctrl+L' },
-              { label: 'Ctrl+A', key: 'Ctrl+A' },
-              { label: 'Ctrl+E', key: 'Ctrl+E' },
-              { label: '\u2191', key: 'Up' },
-              { label: '\u2193', key: 'Down' },
-              { label: '\u2190', key: 'Left' },
-              { label: '\u2192', key: 'Right' },
-            ].map((btn) => (
-              <button key={btn.key} onClick={() => sendSpecialKey(btn.key)}
-                className="px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono whitespace-nowrap transition-colors active:bg-emerald-500/30 active:text-emerald-400 flex-shrink-0">
-                {btn.label}
+          {/* Keyboard toolbar - Termius-style rows */}
+          <div className="bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0">
+            {/* Row 1: Ctrl toggle + special keys */}
+            <div className="flex items-center gap-1 px-1.5 py-1 overflow-x-auto">
+              <button onClick={toggleCtrl}
+                className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${ctrlActive ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}>
+                Ctrl
               </button>
-            ))}
+              <button onClick={() => sendSpecialKey('Esc')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                Esc
+              </button>
+              <button onClick={() => sendSpecialKey('Tab')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                Tab
+              </button>
+              <button onClick={() => sendSpecialKey('-')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                -
+              </button>
+              <button onClick={() => sendSpecialKey('/')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                /
+              </button>
+              <button onClick={() => sendSpecialKey('|')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                |
+              </button>
+              <button onClick={() => sendSpecialKey('\\')}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                \
+              </button>
+            </div>
+            {/* Row 2: Arrow keys */}
+            <div className="flex items-center justify-center gap-1 px-1.5 pb-1.5">
+              <button onClick={() => sendSpecialKey('Left')}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                &#x2190;
+              </button>
+              <button onClick={() => sendSpecialKey('Up')}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                &#x2191;
+              </button>
+              <button onClick={() => sendSpecialKey('Down')}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                &#x2193;
+              </button>
+              <button onClick={() => sendSpecialKey('Right')}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                &#x2192;
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -963,6 +1062,15 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </pre>
             </div>
 
+            <div className="p-2.5 rounded-xl bg-cyan-950/30 border border-cyan-900/30 mb-4">
+              <p className="text-[11px] text-cyan-400 flex items-start gap-1.5">
+                <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Will auto-exit any running menu/script before executing this command.</span>
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <button onClick={() => {
                 let script = confirmTool.script
@@ -974,7 +1082,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 executeCommand(script)
               }}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg transition-all">
-                Execute
+                Confirm &amp; Execute
               </button>
               <button onClick={() => setConfirmTool(null)}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-400 text-sm font-semibold hover:bg-slate-700 transition-colors">
