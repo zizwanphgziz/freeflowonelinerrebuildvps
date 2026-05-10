@@ -11,6 +11,7 @@ interface SavedHost {
   host: string
   port: number
   username: string
+  password?: string
 }
 
 interface ToolCategory {
@@ -27,8 +28,10 @@ interface ToolEntry {
   icon: string
   description: string
   script: string
+  uninstallScript?: string
+  uninstallDescription?: string
   warning?: string
-  requiresInput?: { label: string; placeholder: string; key: string }[]
+  requiresInput?: { label: string; placeholder: string; key: string; options?: string[] }[]
 }
 
 // ─── One-Click Tools Data ────────────────────────────────────────────────────
@@ -59,32 +62,44 @@ const toolCategories: ToolCategory[] = [
         id: 'swap-1g', name: 'Create 1GB Swap', icon: '\u{1F4BE}',
         description: 'Create a 1GB swap file for low-RAM VPS',
         script: 'fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+        uninstallScript: 'swapoff /swapfile && rm -f /swapfile && sed -i "/swapfile/d" /etc/fstab && echo "Swap removed successfully" && free -h',
+        uninstallDescription: 'Remove swap file and revert to no swap',
       },
       {
         id: 'swap-2g', name: 'Create 2GB Swap', icon: '\u{1F4BE}',
         description: 'Create a 2GB swap file',
         script: 'fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+        uninstallScript: 'swapoff /swapfile && rm -f /swapfile && sed -i "/swapfile/d" /etc/fstab && echo "Swap removed successfully" && free -h',
+        uninstallDescription: 'Remove swap file and revert to no swap',
       },
       {
         id: 'swap-4g', name: 'Create 4GB Swap', icon: '\u{1F4BE}',
         description: 'Create a 4GB swap file',
         script: 'fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile swap swap defaults 0 0" >> /etc/fstab && echo "Swap created successfully!" && free -h',
+        uninstallScript: 'swapoff /swapfile && rm -f /swapfile && sed -i "/swapfile/d" /etc/fstab && echo "Swap removed successfully" && free -h',
+        uninstallDescription: 'Remove swap file and revert to no swap',
       },
       {
         id: 'timezone', name: 'Set Timezone', icon: '\u{1F570}\u{FE0F}',
-        description: 'Set server timezone (e.g. Asia/Kuala_Lumpur)',
+        description: 'Set server timezone from list',
         script: 'timedatectl set-timezone TIMEZONE_VALUE && timedatectl',
-        requiresInput: [{ label: 'Timezone', placeholder: 'Asia/Kuala_Lumpur', key: 'TIMEZONE_VALUE' }],
+        uninstallScript: 'timedatectl set-timezone UTC && timedatectl && echo "Timezone reset to UTC"',
+        uninstallDescription: 'Reset timezone back to UTC',
+        requiresInput: [{ label: 'Timezone', placeholder: 'Asia/Kuala_Lumpur', key: 'TIMEZONE_VALUE', options: ['Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Kolkata', 'Asia/Dubai', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam', 'Europe/Moscow', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto', 'America/Sao_Paulo', 'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland', 'UTC'] }],
       },
       {
         id: 'dns-cloudflare', name: 'DNS: Cloudflare', icon: '\u{1F310}',
         description: 'Change DNS to Cloudflare (1.1.1.1)',
         script: 'echo "nameserver 1.1.1.1" > /etc/resolv.conf && echo "nameserver 1.0.0.1" >> /etc/resolv.conf && echo "DNS changed to Cloudflare" && cat /etc/resolv.conf',
+        uninstallScript: 'echo "nameserver 127.0.0.53" > /etc/resolv.conf && echo "DNS restored to system default" && cat /etc/resolv.conf',
+        uninstallDescription: 'Restore DNS to system default (127.0.0.53)',
       },
       {
         id: 'dns-google', name: 'DNS: Google', icon: '\u{1F310}',
         description: 'Change DNS to Google (8.8.8.8)',
         script: 'echo "nameserver 8.8.8.8" > /etc/resolv.conf && echo "nameserver 8.8.4.4" >> /etc/resolv.conf && echo "DNS changed to Google" && cat /etc/resolv.conf',
+        uninstallScript: 'echo "nameserver 127.0.0.53" > /etc/resolv.conf && echo "DNS restored to system default" && cat /etc/resolv.conf',
+        uninstallDescription: 'Restore DNS to system default (127.0.0.53)',
       },
     ],
   },
@@ -98,17 +113,23 @@ const toolCategories: ToolCategory[] = [
         id: 'install-docker', name: 'Install Docker', icon: '\u{1F433}',
         description: 'Install Docker + Docker Compose on any distro',
         script: 'curl -fsSL https://get.docker.com | sh && systemctl enable docker && systemctl start docker && docker --version && docker compose version',
+        uninstallScript: 'systemctl stop docker && apt-get purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && rm -rf /var/lib/docker /var/lib/containerd && echo "Docker removed successfully"',
+        uninstallDescription: 'Remove Docker and all containers/images',
       },
       {
         id: 'install-wireguard', name: 'Install WireGuard', icon: '\u{1F512}',
         description: 'Install WireGuard VPN server (auto-setup)',
         script: 'curl -fsSL https://git.io/wireguard -o wireguard-install.sh && bash wireguard-install.sh',
+        uninstallScript: 'systemctl stop wg-quick@wg0 && apt-get purge -y wireguard wireguard-tools && rm -rf /etc/wireguard && echo "WireGuard removed successfully"',
+        uninstallDescription: 'Remove WireGuard and all configs',
         warning: 'May conflict with existing VPN setups!',
       },
       {
         id: 'install-nginx', name: 'Install Nginx', icon: '\u{1F4E6}',
         description: 'Install and start Nginx reverse proxy',
         script: 'apt-get update -y && apt-get install -y nginx && systemctl enable nginx && systemctl start nginx && nginx -v && echo "Nginx installed and running!"',
+        uninstallScript: 'systemctl stop nginx && apt-get purge -y nginx nginx-common nginx-full && rm -rf /etc/nginx && echo "Nginx removed successfully"',
+        uninstallDescription: 'Remove Nginx and all configs',
       },
     ],
   },
@@ -155,21 +176,29 @@ const toolCategories: ToolCategory[] = [
         id: 'install-mysql', name: 'Install MySQL', icon: '\u{1F5C3}\u{FE0F}',
         description: 'Install MySQL database server',
         script: 'apt-get update -y && apt-get install -y mysql-server && systemctl enable mysql && systemctl start mysql && mysql --version',
+        uninstallScript: 'systemctl stop mysql && apt-get purge -y mysql-server mysql-client mysql-common && rm -rf /var/lib/mysql /etc/mysql && echo "MySQL removed successfully"',
+        uninstallDescription: 'Remove MySQL server and all databases',
       },
       {
         id: 'install-postgres', name: 'Install PostgreSQL', icon: '\u{1F418}',
         description: 'Install PostgreSQL database server',
         script: 'apt-get update -y && apt-get install -y postgresql postgresql-contrib && systemctl enable postgresql && systemctl start postgresql && psql --version',
+        uninstallScript: 'systemctl stop postgresql && apt-get purge -y postgresql postgresql-contrib && rm -rf /var/lib/postgresql /etc/postgresql && echo "PostgreSQL removed successfully"',
+        uninstallDescription: 'Remove PostgreSQL and all databases',
       },
       {
         id: 'install-redis', name: 'Install Redis', icon: '\u{1F534}',
         description: 'Install Redis in-memory data store',
         script: 'apt-get update -y && apt-get install -y redis-server && systemctl enable redis-server && systemctl start redis-server && redis-cli ping',
+        uninstallScript: 'systemctl stop redis-server && apt-get purge -y redis-server && rm -rf /var/lib/redis /etc/redis && echo "Redis removed successfully"',
+        uninstallDescription: 'Remove Redis and all data',
       },
       {
         id: 'install-nodejs', name: 'Install Node.js LTS', icon: '\u{1F7E2}',
         description: 'Install latest Node.js LTS via nvm',
         script: 'curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm install --lts && node --version && npm --version',
+        uninstallScript: 'rm -rf "$HOME/.nvm" && sed -i "/NVM_DIR/d" ~/.bashrc && echo "Node.js (nvm) removed successfully"',
+        uninstallDescription: 'Remove nvm and all Node.js installations',
       },
     ],
   },
@@ -243,6 +272,9 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [showSettings, setShowSettings] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
+  const [toolMode, setToolMode] = useState<'install' | 'uninstall'>('install')
+  const [showPasteInput, setShowPasteInput] = useState(false)
+  const [pasteText, setPasteText] = useState('')
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
@@ -322,12 +354,22 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     }
   }
 
-  // Copy selected text from terminal
+  // Copy selected text from terminal (with HTTP fallback)
   const copySelection = () => {
     if (!termRef.current) return
     const sel = termRef.current.getSelection()
-    if (sel) {
+    if (!sel) return
+    try {
       navigator.clipboard.writeText(sel)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = sel
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
     }
   }
 
@@ -337,16 +379,34 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     termRef.current.selectAll()
   }
 
-  // Paste from clipboard
+  // Paste from clipboard (with fallback input dialog for HTTP)
   const pasteClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText()
       if (text && wsRef.current) {
         wsRef.current.send(JSON.stringify({ type: 'input', data: text }))
+        termRef.current?.focus()
+        return
       }
     } catch {
-      // clipboard access denied
+      // clipboard API not available (HTTP) - show paste input
     }
+    setShowPasteInput(true)
+    setPasteText('')
+  }
+
+  const submitPaste = () => {
+    if (pasteText && wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'input', data: pasteText }))
+    }
+    setShowPasteInput(false)
+    setPasteText('')
+    termRef.current?.focus()
+  }
+
+  const sendMenuCommand = () => {
+    if (!wsRef.current || !isConnected) return
+    wsRef.current.send(JSON.stringify({ type: 'input', data: 'menu\n' }))
     termRef.current?.focus()
   }
 
@@ -465,6 +525,9 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
         case 'connected':
           setIsConnected(true)
           setIsConnecting(false)
+          if (activeHost && authMode === 'password' && password) {
+            setHosts(prev => prev.map(h => h.id === activeHost.id ? { ...h, password } : h))
+          }
           term.writeln('\x1b[32m>>> Connected! Terminal ready.\x1b[0m\r\n')
           setTimeout(() => fitAddonRef.current?.fit(), 200)
           term.onData((data) => {
@@ -651,7 +714,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 {hosts.map((h) => (
                   <div key={h.id}
                     className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-all ${activeHost?.id === h.id ? 'bg-emerald-500/10 border border-emerald-500/30' : 'hover:bg-slate-800/50 border border-transparent'}`}
-                    onClick={() => { setActiveHost(h); if (isConnected) disconnect() }}>
+                    onClick={() => { setActiveHost(h); setPassword(h.password || ''); if (isConnected) disconnect() }}>
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${activeHost?.id === h.id && isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-200 truncate">{h.label}</p>
@@ -957,8 +1020,12 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           <div ref={fullscreenTermRef} className="flex-1 overflow-hidden" />
           {/* Keyboard toolbar - Termius-style rows */}
           <div className="bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0">
-            {/* Row 1: Ctrl toggle + special keys */}
+            {/* Row 1: Menu + Ctrl toggle + special keys + extra symbols */}
             <div className="flex items-center gap-1 px-1.5 py-1 overflow-x-auto">
+              <button onClick={sendMenuCommand}
+                className="px-3 py-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/50 text-cyan-300 text-xs font-bold whitespace-nowrap transition-colors active:bg-cyan-500/30 flex-shrink-0">
+                menu
+              </button>
               <button onClick={toggleCtrl}
                 className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${ctrlActive ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}>
                 Ctrl
@@ -972,20 +1039,44 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 Tab
               </button>
               <button onClick={() => sendSpecialKey('-')}
-                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 -
               </button>
               <button onClick={() => sendSpecialKey('/')}
-                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 /
               </button>
               <button onClick={() => sendSpecialKey('|')}
-                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 |
               </button>
               <button onClick={() => sendSpecialKey('\\')}
-                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 \
+              </button>
+              <button onClick={() => sendSpecialKey('~')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                ~
+              </button>
+              <button onClick={() => sendSpecialKey('_')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                _
+              </button>
+              <button onClick={() => sendSpecialKey(':')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                :
+              </button>
+              <button onClick={() => sendSpecialKey(';')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                ;
+              </button>
+              <button onClick={() => sendSpecialKey('@')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                @
+              </button>
+              <button onClick={() => sendSpecialKey('&')}
+                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                &amp;
               </button>
             </div>
             {/* Row 2: Arrow keys */}
@@ -1008,36 +1099,83 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </button>
             </div>
           </div>
+
+          {/* Paste Input Dialog (fallback for HTTP) */}
+          {showPasteInput && (
+            <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+                <p className="text-sm text-slate-300 mb-2 font-medium">Paste text here:</p>
+                <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)}
+                  autoFocus rows={3} placeholder="Long-press and paste here..."
+                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 font-mono resize-none" />
+                <div className="flex gap-2 mt-3">
+                  <button onClick={submitPaste}
+                    className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/30 transition-colors">
+                    Send to Terminal
+                  </button>
+                  <button onClick={() => { setShowPasteInput(false); setPasteText('') }}
+                    className="px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-sm hover:bg-slate-700 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Tool Confirmation Modal */}
       {confirmTool && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmTool(null)}>
-          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setConfirmTool(null); setToolMode('install') }}>
+          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-2xl">{confirmTool.icon}</span>
               <div>
                 <h3 className="text-lg font-bold text-slate-100">{confirmTool.name}</h3>
-                <p className="text-sm text-slate-400">{confirmTool.description}</p>
+                <p className="text-sm text-slate-400">{toolMode === 'uninstall' && confirmTool.uninstallDescription ? confirmTool.uninstallDescription : confirmTool.description}</p>
               </div>
             </div>
 
-            {confirmTool.requiresInput && (
+            {/* Install / Uninstall toggle */}
+            {confirmTool.uninstallScript && (
+              <div className="flex bg-slate-800 rounded-lg p-0.5 mb-4">
+                <button onClick={() => setToolMode('install')}
+                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${toolMode === 'install' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500'}`}>
+                  Install / Execute
+                </button>
+                <button onClick={() => setToolMode('uninstall')}
+                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${toolMode === 'uninstall' ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                  Uninstall / Revert
+                </button>
+              </div>
+            )}
+
+            {toolMode === 'install' && confirmTool.requiresInput && (
               <div className="space-y-3 mb-4">
                 {confirmTool.requiresInput.map((input) => (
                   <div key={input.key}>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">{input.label}</label>
-                    <input type="text" placeholder={input.placeholder}
-                      value={toolInputs[input.key] || ''}
-                      onChange={(e) => setToolInputs({ ...toolInputs, [input.key]: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                    {input.options ? (
+                      <select
+                        value={toolInputs[input.key] || input.options[0] || ''}
+                        onChange={(e) => setToolInputs({ ...toolInputs, [input.key]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer">
+                        {input.options.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" placeholder={input.placeholder}
+                        value={toolInputs[input.key] || ''}
+                        onChange={(e) => setToolInputs({ ...toolInputs, [input.key]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                    )}
                   </div>
                 ))}
               </div>
             )}
 
-            {confirmTool.warning && (
+            {toolMode === 'install' && confirmTool.warning && (
               <div className="p-3 rounded-xl bg-red-950/30 border border-red-900/30 mb-4">
                 <p className="text-xs text-red-400 flex items-start gap-2">
                   <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1051,10 +1189,13 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-4 overflow-x-auto">
               <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap break-all">
                 <code>{(() => {
+                  if (toolMode === 'uninstall' && confirmTool.uninstallScript) {
+                    return confirmTool.uninstallScript
+                  }
                   let s = confirmTool.script
                   if (confirmTool.requiresInput) {
                     for (const input of confirmTool.requiresInput) {
-                      s = s.replace(input.key, toolInputs[input.key] || input.placeholder)
+                      s = s.replace(input.key, toolInputs[input.key] || input.options?.[0] || input.placeholder)
                     }
                   }
                   return s
@@ -1073,18 +1214,23 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
 
             <div className="flex gap-2">
               <button onClick={() => {
-                let script = confirmTool.script
-                if (confirmTool.requiresInput) {
-                  for (const input of confirmTool.requiresInput) {
-                    script = script.replace(input.key, toolInputs[input.key] || '')
+                if (toolMode === 'uninstall' && confirmTool.uninstallScript) {
+                  executeCommand(confirmTool.uninstallScript)
+                } else {
+                  let script = confirmTool.script
+                  if (confirmTool.requiresInput) {
+                    for (const input of confirmTool.requiresInput) {
+                      script = script.replace(input.key, toolInputs[input.key] || input.options?.[0] || '')
+                    }
                   }
+                  executeCommand(script)
                 }
-                executeCommand(script)
+                setToolMode('install')
               }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg transition-all">
-                Confirm &amp; Execute
+                className={`flex-1 px-4 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg transition-all ${toolMode === 'uninstall' ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white' : 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950'}`}>
+                {toolMode === 'uninstall' ? 'Confirm Uninstall' : 'Confirm & Execute'}
               </button>
-              <button onClick={() => setConfirmTool(null)}
+              <button onClick={() => { setConfirmTool(null); setToolMode('install') }}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-400 text-sm font-semibold hover:bg-slate-700 transition-colors">
                 Cancel
               </button>
