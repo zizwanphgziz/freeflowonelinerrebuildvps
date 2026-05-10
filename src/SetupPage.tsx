@@ -271,17 +271,49 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     return () => window.removeEventListener('resize', handleResize)
   }, [isConnected])
 
-  // Move terminal element between inline and fullscreen containers
+  // Move terminal element between inline and fullscreen containers + auto-size font
   useEffect(() => {
     const termEl = termRef.current?.element
     if (!termEl || !isConnected) return
 
     const target = isFullscreen ? fullscreenTermRef.current : terminalRef.current
     if (target && !target.contains(termEl)) {
+      if (isFullscreen) {
+        // Calculate font size to fit ~80 columns in viewport width
+        const vw = window.innerWidth - 4 // small margin
+        const charRatio = 0.6 // monospace char width / font size ratio
+        const optimalSize = Math.floor(vw / 80 / charRatio)
+        const fontSize = Math.max(7, Math.min(14, optimalSize))
+        termRef.current!.options.fontSize = fontSize
+      } else {
+        termRef.current!.options.fontSize = 14
+      }
       target.appendChild(termEl)
       setTimeout(() => fitAddonRef.current?.fit(), 50)
     }
   }, [isFullscreen, isConnected])
+
+  // Send special key to terminal
+  const sendSpecialKey = (key: string) => {
+    if (!termRef.current || !isConnected) return
+    termRef.current.focus()
+    switch (key) {
+      case 'Ctrl': return // handled as modifier
+      case 'Tab': wsRef.current?.send('\t'); break
+      case 'Esc': wsRef.current?.send('\x1b'); break
+      case 'Up': wsRef.current?.send('\x1b[A'); break
+      case 'Down': wsRef.current?.send('\x1b[B'); break
+      case 'Left': wsRef.current?.send('\x1b[C'); break
+      case 'Right': wsRef.current?.send('\x1b[D'); break
+      case 'Ctrl+C': wsRef.current?.send('\x03'); break
+      case 'Ctrl+D': wsRef.current?.send('\x04'); break
+      case 'Ctrl+Z': wsRef.current?.send('\x1a'); break
+      case 'Ctrl+L': wsRef.current?.send('\x0c'); break
+      case 'Ctrl+A': wsRef.current?.send('\x01'); break
+      case 'Ctrl+E': wsRef.current?.send('\x05'); break
+      default: wsRef.current?.send(key)
+    }
+  }
 
   const initTerminal = useCallback(() => {
     if (!terminalRef.current) return
@@ -840,11 +872,11 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
       {/* Fullscreen Terminal Overlay */}
       {isFullscreen && (
         <div className="fixed inset-0 z-[60] bg-[#0B1222] flex flex-col">
-          {/* Fullscreen header bar */}
-          <div className="flex items-center justify-between px-3 py-2 bg-slate-900/95 border-b border-slate-800/60 flex-shrink-0">
+          {/* Fullscreen header bar - minimal like Termius */}
+          <div className="flex items-center justify-between px-2 py-1.5 bg-slate-900/95 border-b border-slate-800/40 flex-shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-mono text-slate-400">
+              <span className="text-xs font-mono text-slate-400 truncate max-w-[200px]">
                 {activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
               </span>
             </div>
@@ -855,6 +887,28 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           </div>
           {/* Fullscreen terminal body */}
           <div ref={fullscreenTermRef} className="flex-1 overflow-hidden" />
+          {/* Keyboard toolbar - Termius-style special keys */}
+          <div className="flex items-center gap-0.5 px-1 py-1 bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0 overflow-x-auto">
+            {[
+              { label: 'Esc', key: 'Esc' },
+              { label: 'Tab', key: 'Tab' },
+              { label: 'Ctrl+C', key: 'Ctrl+C' },
+              { label: 'Ctrl+D', key: 'Ctrl+D' },
+              { label: 'Ctrl+Z', key: 'Ctrl+Z' },
+              { label: 'Ctrl+L', key: 'Ctrl+L' },
+              { label: 'Ctrl+A', key: 'Ctrl+A' },
+              { label: 'Ctrl+E', key: 'Ctrl+E' },
+              { label: '\u2191', key: 'Up' },
+              { label: '\u2193', key: 'Down' },
+              { label: '\u2190', key: 'Left' },
+              { label: '\u2192', key: 'Right' },
+            ].map((btn) => (
+              <button key={btn.key} onClick={() => sendSpecialKey(btn.key)}
+                className="px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono whitespace-nowrap transition-colors active:bg-emerald-500/30 active:text-emerald-400 flex-shrink-0">
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
