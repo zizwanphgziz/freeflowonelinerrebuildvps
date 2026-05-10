@@ -275,6 +275,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [toolMode, setToolMode] = useState<'install' | 'uninstall'>('install')
   const [showPasteInput, setShowPasteInput] = useState(false)
   const [pasteText, setPasteText] = useState('')
+  const [showSelectText, setShowSelectText] = useState(false)
+  const [selectBuffer, setSelectBuffer] = useState('')
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
@@ -373,10 +375,36 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     }
   }
 
-  // Select all terminal content
-  const selectAll = () => {
+  // Extract terminal buffer text and show in selectable view
+  const openSelectText = () => {
     if (!termRef.current) return
-    termRef.current.selectAll()
+    const buf = termRef.current.buffer.active
+    const lines: string[] = []
+    for (let i = 0; i < buf.length; i++) {
+      const line = buf.getLine(i)
+      if (line) lines.push(line.translateToString(true))
+    }
+    setSelectBuffer(lines.join('\n').trimEnd())
+    setShowSelectText(true)
+  }
+
+  const copySelectBuffer = () => {
+    const ta = document.querySelector('#select-text-area') as HTMLTextAreaElement | null
+    if (!ta) return
+    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd)
+    const textToCopy = sel || selectBuffer
+    try {
+      navigator.clipboard.writeText(textToCopy)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = textToCopy
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
   }
 
   // Paste from clipboard (with fallback input dialog for HTTP)
@@ -998,8 +1026,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
             <div className="flex items-center gap-1">
               {/* Clipboard actions */}
-              <button onClick={selectAll}
-                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Select All">
+              <button onClick={openSelectText}
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Select Text">
                 Select
               </button>
               <button onClick={copySelection}
@@ -1121,6 +1149,32 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </div>
             </div>
           )}
+
+          {/* Select Text Overlay - shows terminal buffer as selectable text */}
+          {showSelectText && (
+            <div className="absolute inset-0 z-10 bg-black/90 flex flex-col">
+              <div className="flex items-center justify-between px-3 py-2 bg-slate-900 border-b border-slate-800/40">
+                <p className="text-xs text-slate-400 font-medium">Long-press to select text, then tap Copy</p>
+                <button onClick={() => setShowSelectText(false)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <textarea id="select-text-area" readOnly value={selectBuffer}
+                className="flex-1 w-full px-3 py-2 bg-[#0B1222] text-emerald-400 text-xs font-mono resize-none focus:outline-none select-text"
+                style={{ userSelect: 'text', WebkitUserSelect: 'text' }} />
+              <div className="flex gap-2 px-3 py-2 bg-slate-900 border-t border-slate-800/40">
+                <button onClick={() => { copySelectBuffer(); setShowSelectText(false) }}
+                  className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/30 transition-colors">
+                  Copy Selected
+                </button>
+                <button onClick={() => setShowSelectText(false)}
+                  className="px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-sm hover:bg-slate-700 transition-colors">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1154,7 +1208,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               <div className="space-y-3 mb-4">
                 {confirmTool.requiresInput.map((input) => (
                   <div key={input.key}>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">{input.label}</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">{input.label} {input.options && <span className="normal-case tracking-normal text-slate-600">(tap to choose)</span>}</label>
                     {input.options ? (
                       <select
                         value={toolInputs[input.key] || input.options[0] || ''}
