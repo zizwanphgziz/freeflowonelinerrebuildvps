@@ -241,6 +241,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [toolInputs, setToolInputs] = useState<Record<string, string>>({})
   const [backendUrl, setBackendUrlState] = useState(getBackendUrl)
   const [showSettings, setShowSettings] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fontSize, setFontSize] = useState(14)
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -258,7 +260,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     }
   }, [])
 
-  // Resize terminal on window resize
+  // Resize terminal on window resize or fullscreen/font change
   useEffect(() => {
     const handleResize = () => {
       if (fitAddonRef.current && isConnected) {
@@ -269,6 +271,14 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
     return () => window.removeEventListener('resize', handleResize)
   }, [isConnected])
 
+  // Re-fit terminal when fullscreen or font size changes
+  useEffect(() => {
+    if (termRef.current && fitAddonRef.current && isConnected) {
+      termRef.current.options.fontSize = fontSize
+      setTimeout(() => fitAddonRef.current?.fit(), 50)
+    }
+  }, [isFullscreen, fontSize, isConnected])
+
   const initTerminal = useCallback(() => {
     if (!terminalRef.current) return
 
@@ -278,7 +288,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 14,
+      fontSize: fontSize,
       fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
       theme: {
         background: '#0B1222',
@@ -475,6 +485,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
+      {!isFullscreen && (
       <header className="sticky top-0 z-50 border-b border-slate-800/60 backdrop-blur-xl bg-slate-950/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -501,6 +512,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           </button>
         </div>
       </header>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
@@ -528,7 +540,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* LEFT PANEL: Host Manager */}
-          <div className="lg:col-span-3">
+          <div className={`lg:col-span-3 ${isFullscreen ? 'hidden' : ''}`}>
             <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
@@ -702,31 +714,68 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* MIDDLE/RIGHT: Terminal + Tools */}
-          <div className="lg:col-span-9 space-y-6">
+          <div className={`lg:col-span-9 space-y-6 ${isFullscreen ? 'contents' : ''}`}>
 
             {/* Terminal */}
-            <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
+            <div className={isFullscreen
+              ? 'fixed inset-0 z-[60] bg-[#0B1222] flex flex-col'
+              : 'rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden'
+            }>
+              <div className={`flex items-center justify-between border-b border-slate-800/60 flex-shrink-0 ${
+                isFullscreen ? 'px-3 py-2 bg-slate-900' : 'px-4 py-3'
+              }`}>
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-500/60" />
-                    <div className="w-3 h-3 rounded-full bg-amber-500/60" />
-                    <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
+                    <div className={`rounded-full bg-red-500/60 ${isFullscreen ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
+                    <div className={`rounded-full bg-amber-500/60 ${isFullscreen ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
+                    <div className={`rounded-full bg-emerald-500/60 ${isFullscreen ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
                   </div>
                   <span className="text-xs font-mono text-slate-500 ml-2">
                     {isConnected && activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
                   </span>
+                  {isConnected && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 ml-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      LIVE
+                    </div>
+                  )}
                 </div>
-                {isConnected && (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {isConnected && (
+                    <>
+                      {/* Font size controls */}
+                      <button onClick={() => setFontSize(Math.max(8, fontSize - 2))}
+                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors" title="Zoom out">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                      </button>
+                      <span className="text-xs text-slate-500 font-mono min-w-[2rem] text-center">{fontSize}</span>
+                      <button onClick={() => setFontSize(Math.min(28, fontSize + 2))}
+                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors" title="Zoom in">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      </button>
+                      {/* Fullscreen toggle */}
+                      <button onClick={() => setIsFullscreen(!isFullscreen)}
+                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors ml-0.5" title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+                        {isFullscreen ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4H4m0 0l5 5M9 15v5H4m0 0l5-5m11-5V4h-4m0 0l5 5m-5 6v5h5m0 0l-5-5" /></svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                        )}
+                      </button>
+                      {/* Disconnect in fullscreen */}
+                      {isFullscreen && (
+                        <button onClick={disconnect}
+                          className="px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold border border-red-500/20 transition-colors ml-1">
+                          Disconnect
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               <div
                 ref={terminalRef}
-                className="bg-[#0B1222] min-h-[300px] sm:min-h-[400px]"
+                className={isFullscreen ? 'flex-1 overflow-hidden bg-[#0B1222]' : 'bg-[#0B1222] min-h-[300px] sm:min-h-[400px]'}
                 style={{ padding: isConnected ? '0' : '16px' }}
               >
                 {!isConnected && !isConnecting && (
@@ -746,6 +795,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* One-Click Tools */}
+            {!isFullscreen && (
             <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800/60">
                 <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-3">
@@ -818,6 +868,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 ))}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
