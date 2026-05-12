@@ -361,8 +361,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-list-users', name: 'List VPN Users', icon: '\u{1F4CB}',
-        description: 'Show all xray VPN user accounts with expiry dates (JinGGo compatible)',
-        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME            EXPIRY DATE         STATUS" && echo "---------------------------------------------------" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); exp=$(echo "$line" | awk "{print \$3}"); today=$(date +%Y-%m-%d); if [ "$exp" \> "$today" ] || [ "$exp" = "$today" ]; then st="ACTIVE"; else st="EXPIRED"; fi; printf "%-19s %-19s %s\n" "$user" "$exp" "$st"; done && echo "---------------------------------------------------" && total=$(grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | wc -l) && echo "Total accounts: $total user(s)"',
+        description: 'Show all xray VPN user accounts with expiry, status & active connections (JinGGo compatible)',
+        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME            EXPIRY DATE         STATUS      CONNECTIONS" && echo "--------------------------------------------------------------" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); exp=$(echo "$line" | awk "{print \$3}"); today=$(date +%Y-%m-%d); if [ "$exp" \> "$today" ] || [ "$exp" = "$today" ]; then st="ACTIVE"; else st="EXPIRED"; fi; conns=$(grep -c "$user" /var/log/xray/access.log 2>/dev/null || echo 0); printf "%-19s %-19s %-11s %s\n" "$user" "$exp" "$st" "$conns hits"; done && echo "--------------------------------------------------------------" && total=$(grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | wc -l) && echo "Total accounts: $total user(s)" && echo "" && echo "=== ACTIVE IPs PER USER ===" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); echo "" && echo "--- $user ---"; grep "$user" /var/log/xray/access.log 2>/dev/null | grep -oP "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | sort | uniq -c | sort -rn | head -10 || echo "No connections found"; done',
       },
     ],
   },
@@ -1187,7 +1187,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           {/* Fullscreen terminal body */}
-          <div ref={fullscreenTermRef} className="flex-1 overflow-hidden" />
+          <div ref={fullscreenTermRef} className="flex-1 min-h-0 overflow-hidden pb-2" />
           {/* Keyboard toolbar - Termius-style rows */}
           <div className="bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0">
             {/* Row 1: Menu + Ctrl toggle + special keys + extra symbols */}
