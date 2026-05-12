@@ -130,6 +130,7 @@ const toolCategories: ToolCategory[] = [
         script: 'apt-get update -y && apt-get install -y nginx && systemctl enable nginx && systemctl start nginx && nginx -v && echo "Nginx installed and running!"',
         uninstallScript: 'systemctl stop nginx && apt-get purge -y nginx nginx-common nginx-full && rm -rf /etc/nginx && echo "Nginx removed successfully"',
         uninstallDescription: 'Remove Nginx and all configs',
+        warning: 'JinGGo/autoscript VPN already uses Nginx! This may overwrite your VPN nginx config.',
       },
     ],
   },
@@ -233,8 +234,8 @@ const toolCategories: ToolCategory[] = [
       },
       {
         id: 'vpn-active-connections', name: 'Show Active Connections', icon: '\u{1F465}',
-        description: 'Count and list active VPN connections by port and protocol',
-        script: 'echo "=== ACTIVE CONNECTIONS ===" && echo "" && echo "--- Connections per port ---" && ss -tn state established | awk \'NR>1{split($4,a,":"); print a[length(a)]}\' | sort | uniq -c | sort -rn | head -20 && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l && echo "" && echo "--- Connected IPs (top 20) ---" && ss -tn state established | awk \'NR>1{split($5,a,":"); print a[1]}\' | sort | uniq -c | sort -rn | head -20',
+        description: 'Show logged-in SSH, Dropbear & OpenVPN users (JinGGo compatible)',
+        script: 'echo "=== ACTIVE VPN CONNECTIONS ===" && echo "" && echo "--- Dropbear Users ---" && if [ -e /var/log/auth.log ]; then LOG=/var/log/auth.log; elif [ -e /var/log/secure ]; then LOG=/var/log/secure; fi && for PID in $(ps aux | grep -i dropbear | awk \'NR>1{print $2}\'); do cat $LOG 2>/dev/null | grep "dropbear\[$PID\]" | grep "Password auth succeeded" | tail -1 | awk \'{print $10, $12}\'; done && echo "" && echo "--- OpenSSH Users ---" && for PID in $(ps aux | grep "\[priv\]" | awk \'{print $2}\'); do cat $LOG 2>/dev/null | grep "sshd\[$PID\]" | grep "Accepted password" | tail -1 | awk \'{print $9, $11}\'; done && echo "" && echo "--- OpenVPN TCP ---" && if [ -f /etc/openvpn/server/openvpn-tcp.log ]; then cat /etc/openvpn/server/openvpn-tcp.log | grep -w "^CLIENT_LIST" | cut -d, -f2,3,8 | sed "s/,/  /g"; else echo "No TCP log"; fi && echo "" && echo "--- OpenVPN UDP ---" && if [ -f /etc/openvpn/server/openvpn-udp.log ]; then cat /etc/openvpn/server/openvpn-udp.log | grep -w "^CLIENT_LIST" | cut -d, -f2,3,8 | sed "s/,/  /g"; else echo "No UDP log"; fi && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l',
       },
       {
         id: 'vpn-bandwidth-monitor', name: 'Monitor Bandwidth Live', icon: '\u{1F4C8}',
@@ -250,8 +251,8 @@ const toolCategories: ToolCategory[] = [
       },
       {
         id: 'vpn-test-ports', name: 'Test All VPN Ports', icon: '\u{1F50C}',
-        description: 'Quick check if common VPN ports are listening and responding',
-        script: 'echo "=== VPN PORT CHECK ===" && for port in 22 80 443 8080 8443 8880 2082 2083 2052 2053 2086 2087 2095 2096 10000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\\(\\(\\\"\\K[^\"]+"); echo "[OPEN] Port $port - $proc"; else echo "[CLOSED] Port $port"; fi; done',
+        description: 'Quick check if JinGGo VPN ports are listening (SSH, Dropbear, Stunnel, Squid, OpenVPN, xray, etc.)',
+        script: 'echo "=== VPN PORT CHECK (JinGGo) ===" && for port in 22 80 81 109 143 442 443 444 777 1194 2200 3128 8080 8880 8000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then echo "[OPEN] Port $port"; else echo "[CLOSED] Port $port"; fi; done && echo "" && echo "--- UDP Ports ---" && for port in 2200 7100 7200 7300; do result=$(ss -ulnp | grep ":$port " | head -1); if [ -n "$result" ]; then echo "[OPEN] UDP $port"; else echo "[CLOSED] UDP $port"; fi; done',
       },
       {
         id: 'vpn-show-port-usage', name: 'Show Port Usage', icon: '\u{1F4CA}',
@@ -360,8 +361,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-list-users', name: 'List VPN Users', icon: '\u{1F4CB}',
-        description: 'Show all created system/VPN user accounts',
-        script: 'echo "=== VPN USER ACCOUNTS ===" && echo "" && echo "--- System users with shell access ---" && awk -F: \'$7 ~ /bash|sh/ && $3 >= 1000{print "User: "$1" | UID: "$3" | Home: "$6}\' /etc/passwd && echo "" && echo "--- All non-system users ---" && awk -F: \'$3 >= 1000 && $3 < 65534{print "User: "$1" | UID: "$3" | Shell: "$7}\' /etc/passwd && echo "" && echo "--- Total users ---" && awk -F: \'$3 >= 1000 && $3 < 65534{count++} END{print count}\' /etc/passwd',
+        description: 'Show all VPN user accounts with expiry dates and status (JinGGo compatible)',
+        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME          EXP DATE          STATUS" && echo "---------------------------------------------------" && while IFS=: read -r user _ uid _ _ _ _; do if [ "$uid" -ge 1000 ] 2>/dev/null && [ "$uid" -lt 65534 ] 2>/dev/null; then exp=$(chage -l "$user" 2>/dev/null | grep "Account expires" | awk -F": " \'{print $2}\'); status=$(passwd -S "$user" 2>/dev/null | awk \'{print $2}\'); if [ "$status" = "L" ]; then st="LOCKED"; else st="ACTIVE"; fi; printf "%-17s %-17s %s\n" "$user" "$exp" "$st"; fi; done < /etc/passwd && echo "---------------------------------------------------" && total=$(awk -F: \'$3 >= 1000 && $3 < 65534{c++} END{print c+0}\' /etc/passwd) && echo "Total accounts: $total user(s)"',
       },
     ],
   },
