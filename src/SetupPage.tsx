@@ -220,6 +220,151 @@ const toolCategories: ToolCategory[] = [
       },
     ],
   },
+  {
+    id: 'vpn-diagnostics',
+    name: 'VPN Diagnostics & Monitoring',
+    icon: '\u{1F50D}',
+    color: '#06B6D4',
+    tools: [
+      {
+        id: 'vpn-check-services', name: 'Check All VPN Services', icon: '\u{1F4CB}',
+        description: 'Show status of all VPN-related services (xray, nginx, stunnel, dropbear, openvpn, etc.)',
+        script: 'echo "=== VPN SERVICES STATUS ===" && for svc in xray nginx stunnel4 stunnel dropbear openvpn squid privoxy shadowsocks-libev v2ray trojan haproxy; do if systemctl list-units --type=service --all | grep -q "$svc"; then echo ""; echo "--- $svc ---"; systemctl status $svc --no-pager -l 2>/dev/null | head -5; else echo "[$svc] not installed"; fi; done && echo "" && echo "=== DONE ==="',
+      },
+      {
+        id: 'vpn-active-connections', name: 'Show Active Connections', icon: '\u{1F465}',
+        description: 'Count and list active VPN connections by port and protocol',
+        script: 'echo "=== ACTIVE CONNECTIONS ===" && echo "" && echo "--- Connections per port ---" && ss -tn state established | awk \'NR>1{split($4,a,":"); print a[length(a)]}\' | sort | uniq -c | sort -rn | head -20 && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l && echo "" && echo "--- Connected IPs (top 20) ---" && ss -tn state established | awk \'NR>1{split($5,a,":"); print a[1]}\' | sort | uniq -c | sort -rn | head -20',
+      },
+      {
+        id: 'vpn-bandwidth-monitor', name: 'Monitor Bandwidth Live', icon: '\u{1F4C8}',
+        description: 'Show real-time network traffic stats (installs vnstat if needed)',
+        script: 'command -v vnstat >/dev/null || apt-get install -y vnstat >/dev/null 2>&1 && systemctl start vnstat 2>/dev/null; echo "=== BANDWIDTH SUMMARY ===" && vnstat && echo "" && echo "=== LIVE TRAFFIC (5 sec sample) ===" && vnstat -tr 5',
+        uninstallScript: 'systemctl stop vnstat && apt-get purge -y vnstat && rm -rf /var/lib/vnstat && echo "vnstat removed successfully"',
+        uninstallDescription: 'Remove vnstat bandwidth monitor',
+      },
+      {
+        id: 'vpn-cert-expiry', name: 'Check Certificate Expiry', icon: '\u{1F4DC}',
+        description: 'Show SSL/TLS certificate expiry dates for your domain',
+        script: 'echo "=== SSL CERTIFICATE EXPIRY ===" && for certfile in /etc/letsencrypt/live/*/fullchain.pem /etc/xray/cert/*.crt /etc/v2ray/cert/*.crt /root/cert.crt /root/*.crt; do if [ -f "$certfile" ]; then echo "" && echo "--- $certfile ---" && openssl x509 -in "$certfile" -noout -subject -enddate 2>/dev/null; fi; done && echo "" && echo "=== DONE ==="',
+      },
+      {
+        id: 'vpn-test-ports', name: 'Test All VPN Ports', icon: '\u{1F50C}',
+        description: 'Quick check if common VPN ports are listening and responding',
+        script: 'echo "=== VPN PORT CHECK ===" && for port in 22 80 443 8080 8443 8880 2082 2083 2052 2053 2086 2087 2095 2096 10000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\\(\\(\\\"\\K[^\"]+"); echo "[OPEN] Port $port - $proc"; else echo "[CLOSED] Port $port"; fi; done',
+      },
+      {
+        id: 'vpn-show-port-usage', name: 'Show Port Usage', icon: '\u{1F4CA}',
+        description: 'Show which process is using which port (useful for debugging conflicts)',
+        script: 'echo "=== PORT USAGE ===" && ss -tlnp | awk \'NR>1{gsub(/.*:/,"",$4); port=$4; proc=$NF; gsub(/.*\\"/,"",proc); gsub(/\\".*/,"",proc); printf "Port %-6s -> %s\\n", port, $NF}\' | sort -t" " -k2 -n',
+      },
+    ],
+  },
+  {
+    id: 'vpn-maintenance',
+    name: 'VPN Maintenance',
+    icon: '\u{1F527}',
+    color: '#F97316',
+    tools: [
+      {
+        id: 'vpn-restart-all', name: 'Restart All VPN Services', icon: '\u{1F504}',
+        description: 'One-click restart all VPN-related services (xray, nginx, stunnel, dropbear, etc.)',
+        script: 'echo "=== RESTARTING VPN SERVICES ===" && for svc in xray nginx stunnel4 stunnel dropbear openvpn squid haproxy; do if systemctl list-units --type=service --all | grep -q "$svc"; then systemctl restart $svc 2>/dev/null && echo "[OK] $svc restarted" || echo "[FAIL] $svc failed to restart"; fi; done && echo "" && echo "=== ALL SERVICES RESTARTED ==="',
+        warning: 'This will briefly disconnect all active VPN users!',
+      },
+      {
+        id: 'vpn-clear-logs', name: 'Clear VPN Logs', icon: '\u{1F9F9}',
+        description: 'Purge old xray/nginx/system logs to free disk space',
+        script: 'echo "=== CLEARING LOGS ===" && echo "Before:" && du -sh /var/log/ 2>/dev/null && journalctl --vacuum-time=1d 2>/dev/null && find /var/log -name "*.log" -mtime +3 -delete 2>/dev/null && find /var/log -name "*.gz" -delete 2>/dev/null && cat /dev/null > /var/log/xray/access.log 2>/dev/null; cat /dev/null > /var/log/xray/error.log 2>/dev/null; cat /dev/null > /var/log/nginx/access.log 2>/dev/null; cat /dev/null > /var/log/nginx/error.log 2>/dev/null; echo "After:" && du -sh /var/log/ 2>/dev/null && echo "=== LOGS CLEARED ==="',
+      },
+      {
+        id: 'vpn-renew-cert', name: 'Renew SSL Certificate', icon: '\u{1F510}',
+        description: 'Force-renew Let\'s Encrypt / ACME SSL certificates',
+        script: 'echo "=== RENEWING SSL CERTIFICATE ===" && if command -v certbot >/dev/null; then certbot renew --force-renewal && echo "Certbot renewal done!"; elif [ -f /root/.acme.sh/acme.sh ]; then /root/.acme.sh/acme.sh --renew --force -d DOMAIN_VALUE && echo "ACME renewal done!"; elif [ -f ~/.acme.sh/acme.sh ]; then ~/.acme.sh/acme.sh --renew --force -d DOMAIN_VALUE && echo "ACME renewal done!"; else echo "No certbot or acme.sh found! Install one first."; fi',
+        requiresInput: [{ label: 'Domain', placeholder: 'example.com', key: 'DOMAIN_VALUE' }],
+      },
+      {
+        id: 'vpn-update-xray', name: 'Update Xray Core', icon: '\u{2B06}\u{FE0F}',
+        description: 'Update xray-core to the latest version',
+        script: 'echo "=== UPDATING XRAY CORE ===" && echo "Current version:" && xray version 2>/dev/null || echo "xray not found" && bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) && echo "" && echo "New version:" && xray version && systemctl restart xray && echo "=== XRAY UPDATED & RESTARTED ==="',
+        warning: 'This will briefly restart xray and disconnect active users!',
+      },
+      {
+        id: 'vpn-fix-xray-config', name: 'Validate Xray Config', icon: '\u{2705}',
+        description: 'Test xray config file for errors before restarting',
+        script: 'echo "=== VALIDATING XRAY CONFIG ===" && if [ -f /usr/local/etc/xray/config.json ]; then xray run -test -c /usr/local/etc/xray/config.json && echo "" && echo "Config is VALID!" || echo "Config has ERRORS!"; elif [ -f /etc/xray/config.json ]; then xray run -test -c /etc/xray/config.json && echo "" && echo "Config is VALID!" || echo "Config has ERRORS!"; else echo "Xray config not found at /usr/local/etc/xray/config.json or /etc/xray/config.json"; fi',
+      },
+    ],
+  },
+  {
+    id: 'vpn-security',
+    name: 'VPN Security',
+    icon: '\u{1F6E1}\u{FE0F}',
+    color: '#EF4444',
+    tools: [
+      {
+        id: 'vpn-block-ip', name: 'Block IP Address', icon: '\u{1F6AB}',
+        description: 'Block an abusive IP address using iptables',
+        script: 'iptables -A INPUT -s BLOCK_IP -j DROP && iptables -A OUTPUT -d BLOCK_IP -j DROP && echo "Blocked IP: BLOCK_IP" && echo "" && echo "Currently blocked IPs:" && iptables -L INPUT -n | grep DROP',
+        requiresInput: [{ label: 'IP to Block', placeholder: '1.2.3.4', key: 'BLOCK_IP' }],
+        uninstallScript: 'iptables -D INPUT -s BLOCK_IP -j DROP 2>/dev/null; iptables -D OUTPUT -d BLOCK_IP -j DROP 2>/dev/null; echo "Unblocked IP: BLOCK_IP"',
+        uninstallDescription: 'Unblock a previously blocked IP address',
+      },
+      {
+        id: 'vpn-failed-logins', name: 'Show Failed Logins', icon: '\u{1F6A8}',
+        description: 'Check auth logs for brute force / failed SSH login attempts',
+        script: 'echo "=== FAILED LOGIN ATTEMPTS ===" && echo "" && echo "--- Top 20 Attacking IPs ---" && grep "Failed password" /var/log/auth.log 2>/dev/null | awk \'{print $(NF-3)}\' | sort | uniq -c | sort -rn | head -20 || journalctl -u ssh --no-pager | grep "Failed password" | awk \'{print $(NF-3)}\' | sort | uniq -c | sort -rn | head -20 && echo "" && echo "--- Total failed attempts ---" && grep -c "Failed password" /var/log/auth.log 2>/dev/null || journalctl -u ssh --no-pager | grep -c "Failed password"',
+      },
+      {
+        id: 'vpn-install-fail2ban', name: 'Install Fail2ban', icon: '\u{1F512}',
+        description: 'Auto-ban IPs after repeated failed login attempts',
+        script: 'apt-get update -y && apt-get install -y fail2ban && systemctl enable fail2ban && cat > /etc/fail2ban/jail.local << \'EOF\'\n[sshd]\nenabled = true\nport = ssh\nfilter = sshd\nlogpath = /var/log/auth.log\nmaxretry = 5\nbantime = 3600\nfindtime = 600\nEOF\nsystemctl restart fail2ban && echo "Fail2ban installed! IPs banned after 5 failed attempts for 1 hour." && fail2ban-client status',
+        uninstallScript: 'systemctl stop fail2ban && apt-get purge -y fail2ban && rm -rf /etc/fail2ban && echo "Fail2ban removed successfully"',
+        uninstallDescription: 'Remove fail2ban and all ban rules',
+      },
+    ],
+  },
+  {
+    id: 'vpn-performance',
+    name: 'VPN Performance Boost',
+    icon: '\u{26A1}',
+    color: '#FBBF24',
+    tools: [
+      {
+        id: 'vpn-enable-bbr', name: 'Enable TCP BBR', icon: '\u{1F680}',
+        description: 'Enable Google BBR congestion control for faster VPN throughput',
+        script: 'echo "=== ENABLING BBR ===" && echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf && echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf && sysctl -p && echo "" && echo "Current congestion control:" && sysctl net.ipv4.tcp_congestion_control && echo "Available:" && sysctl net.ipv4.tcp_available_congestion_control && echo "=== BBR ENABLED ==="',
+        uninstallScript: 'sed -i "/net.core.default_qdisc=fq/d" /etc/sysctl.conf && sed -i "/net.ipv4.tcp_congestion_control=bbr/d" /etc/sysctl.conf && sysctl -p && echo "BBR disabled, reverted to default"',
+        uninstallDescription: 'Disable BBR and revert to default congestion control',
+      },
+      {
+        id: 'vpn-optimize-sysctl', name: 'Optimize Network (sysctl)', icon: '\u{2699}\u{FE0F}',
+        description: 'Apply VPN-optimized kernel network settings for better performance',
+        script: 'echo "=== APPLYING VPN OPTIMIZATIONS ===" && cat >> /etc/sysctl.conf << \'EOF\'\n# VPN Optimizations\nnet.ipv4.tcp_fastopen=3\nnet.ipv4.tcp_slow_start_after_idle=0\nnet.ipv4.tcp_mtu_probing=1\nnet.core.rmem_max=16777216\nnet.core.wmem_max=16777216\nnet.ipv4.tcp_rmem=4096 87380 16777216\nnet.ipv4.tcp_wmem=4096 65536 16777216\nnet.ipv4.ip_forward=1\nnet.core.netdev_max_backlog=5000\nEOF\nsysctl -p && echo "=== OPTIMIZATIONS APPLIED ==="',
+        uninstallScript: 'sed -i "/# VPN Optimizations/,/net.core.netdev_max_backlog/d" /etc/sysctl.conf && sysctl -p && echo "VPN optimizations removed from sysctl.conf"',
+        uninstallDescription: 'Remove VPN network optimizations from sysctl.conf',
+        warning: 'Modifies kernel network parameters. Safe but may need revert if issues arise.',
+      },
+      {
+        id: 'vpn-clear-ram', name: 'Clear RAM Cache', icon: '\u{1F9F9}',
+        description: 'Free up cached memory without affecting running processes',
+        script: 'echo "=== CLEARING RAM CACHE ===" && echo "Before:" && free -h && sync && echo 3 > /proc/sys/vm/drop_caches && echo "" && echo "After:" && free -h && echo "=== CACHE CLEARED ==="',
+      },
+    ],
+  },
+  {
+    id: 'vpn-users',
+    name: 'VPN User Management',
+    icon: '\u{1F465}',
+    color: '#A78BFA',
+    tools: [
+      {
+        id: 'vpn-list-users', name: 'List VPN Users', icon: '\u{1F4CB}',
+        description: 'Show all created system/VPN user accounts',
+        script: 'echo "=== VPN USER ACCOUNTS ===" && echo "" && echo "--- System users with shell access ---" && awk -F: \'$7 ~ /bash|sh/ && $3 >= 1000{print "User: "$1" | UID: "$3" | Home: "$6}\' /etc/passwd && echo "" && echo "--- All non-system users ---" && awk -F: \'$3 >= 1000 && $3 < 65534{print "User: "$1" | UID: "$3" | Shell: "$7}\' /etc/passwd && echo "" && echo "--- Total users ---" && awk -F: \'$3 >= 1000 && $3 < 65534{count++} END{print count}\' /etc/passwd',
+      },
+    ],
+  },
 ]
 
 // ─── LocalStorage helpers ────────────────────────────────────────────────────
@@ -1027,12 +1172,8 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             <div className="flex items-center gap-1">
               {/* Clipboard actions */}
               <button onClick={openSelectText}
-                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Select Text">
-                Select
-              </button>
-              <button onClick={copySelection}
-                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Copy">
-                Copy
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Select & Copy">
+                Select & Copy
               </button>
               <button onClick={pasteClipboard}
                 className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-medium transition-colors" title="Paste">
