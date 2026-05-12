@@ -229,13 +229,13 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-check-services', name: 'Check All VPN Services', icon: '\u{1F4CB}',
-        description: 'Show status of all VPN-related services (xray, nginx, stunnel, dropbear, openvpn, etc.)',
-        script: 'echo "=== VPN SERVICES STATUS ===" && for svc in xray nginx stunnel4 stunnel dropbear openvpn squid privoxy shadowsocks-libev v2ray trojan haproxy; do if systemctl list-units --type=service --all | grep -q "$svc"; then echo ""; echo "--- $svc ---"; systemctl status $svc --no-pager -l 2>/dev/null | head -5; else echo "[$svc] not installed"; fi; done && echo "" && echo "=== DONE ==="',
+        description: 'Show status of all JinGGo VPN services (xray, xray@none, xray@xhttp, dropbear, ssh, fail2ban)',
+        script: 'echo "=== VPN SERVICES STATUS (JinGGo) ===" && for svc in xray xray@none xray@xhttp dropbear ssh fail2ban caddy; do echo ""; echo "--- $svc ---"; systemctl is-active $svc 2>/dev/null && systemctl status $svc --no-pager -l 2>/dev/null | head -5 || echo "[NOT RUNNING]"; done && echo "" && echo "=== DONE ==="',
       },
       {
         id: 'vpn-active-connections', name: 'Show Active Connections', icon: '\u{1F465}',
-        description: 'Show logged-in SSH, Dropbear & OpenVPN users (JinGGo compatible)',
-        script: 'echo "=== ACTIVE VPN CONNECTIONS ===" && echo "" && echo "--- Dropbear Users ---" && if [ -e /var/log/auth.log ]; then LOG=/var/log/auth.log; elif [ -e /var/log/secure ]; then LOG=/var/log/secure; fi && for PID in $(ps aux | grep -i dropbear | awk \'NR>1{print $2}\'); do cat $LOG 2>/dev/null | grep "dropbear\[$PID\]" | grep "Password auth succeeded" | tail -1 | awk \'{print $10, $12}\'; done && echo "" && echo "--- OpenSSH Users ---" && for PID in $(ps aux | grep "\[priv\]" | awk \'{print $2}\'); do cat $LOG 2>/dev/null | grep "sshd\[$PID\]" | grep "Accepted password" | tail -1 | awk \'{print $9, $11}\'; done && echo "" && echo "--- OpenVPN TCP ---" && if [ -f /etc/openvpn/server/openvpn-tcp.log ]; then cat /etc/openvpn/server/openvpn-tcp.log | grep -w "^CLIENT_LIST" | cut -d, -f2,3,8 | sed "s/,/  /g"; else echo "No TCP log"; fi && echo "" && echo "--- OpenVPN UDP ---" && if [ -f /etc/openvpn/server/openvpn-udp.log ]; then cat /etc/openvpn/server/openvpn-udp.log | grep -w "^CLIENT_LIST" | cut -d, -f2,3,8 | sed "s/,/  /g"; else echo "No UDP log"; fi && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l',
+        description: 'Show logged-in SSH, Dropbear & xray users (JinGGo compatible)',
+        script: 'echo "=== ACTIVE VPN CONNECTIONS (JinGGo) ===" && echo "" && echo "--- SSH/Dropbear Sessions ---" && who 2>/dev/null && echo "" && echo "--- Xray Active Connections ---" && if [ -f /var/log/xray/access.log ]; then echo "Recent connections:"; tail -20 /var/log/xray/access.log 2>/dev/null | grep -oP "email: [^ ]+" | sort | uniq -c | sort -rn; else echo "No xray access log"; fi && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l',
       },
       {
         id: 'vpn-bandwidth-monitor', name: 'Monitor Bandwidth Live', icon: '\u{1F4C8}',
@@ -247,12 +247,12 @@ const toolCategories: ToolCategory[] = [
       {
         id: 'vpn-cert-expiry', name: 'Check Certificate Expiry', icon: '\u{1F4DC}',
         description: 'Show SSL/TLS certificate expiry dates for your domain',
-        script: 'echo "=== SSL CERTIFICATE EXPIRY ===" && for certfile in /etc/letsencrypt/live/*/fullchain.pem /etc/xray/cert/*.crt /etc/v2ray/cert/*.crt /root/cert.crt /root/*.crt; do if [ -f "$certfile" ]; then echo "" && echo "--- $certfile ---" && openssl x509 -in "$certfile" -noout -subject -enddate 2>/dev/null; fi; done && echo "" && echo "=== DONE ==="',
+        script: 'echo "=== SSL CERTIFICATE EXPIRY ===" && DOMAIN=$(cat /etc/xray/domain 2>/dev/null || echo "unknown") && echo "Domain: $DOMAIN" && echo "" && for certfile in /etc/letsencrypt/live/*/fullchain.pem /root/cert.crt /root/*.crt; do if [ -f "$certfile" ]; then echo "--- $certfile ---" && openssl x509 -in "$certfile" -noout -subject -enddate 2>/dev/null && echo ""; fi; done && echo "--- Live certificate check ---" && echo | openssl s_client -connect $DOMAIN:443 -servername $DOMAIN 2>/dev/null | openssl x509 -noout -subject -enddate 2>/dev/null || echo "Could not check live cert" && echo "" && echo "=== DONE ==="',
       },
       {
         id: 'vpn-test-ports', name: 'Test All VPN Ports', icon: '\u{1F50C}',
-        description: 'Quick check if JinGGo VPN ports are listening (SSH, Dropbear, Stunnel, Squid, OpenVPN, xray, etc.)',
-        script: 'echo "=== VPN PORT CHECK (JinGGo) ===" && for port in 22 80 81 109 143 442 443 444 777 1194 2200 3128 8080 8880 8000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then echo "[OPEN] Port $port"; else echo "[CLOSED] Port $port"; fi; done && echo "" && echo "--- UDP Ports ---" && for port in 2200 7100 7200 7300; do result=$(ss -ulnp | grep ":$port " | head -1); if [ -n "$result" ]; then echo "[OPEN] UDP $port"; else echo "[CLOSED] UDP $port"; fi; done',
+        description: 'Quick check if JinGGo VPN ports are listening (xray, SSH, Dropbear, etc.)',
+        script: 'echo "=== VPN PORT CHECK (JinGGo) ===" && echo "--- TCP Ports ---" && for port in 22 80 109 110 443 2222 5443 8080 8880; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\(\(\"\K[^"]+"); echo "[OPEN] TCP $port - $proc"; else echo "[CLOSED] TCP $port"; fi; done && echo "" && echo "--- Localhost Ports ---" && for port in 1318 7200 7300 20241 40000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\(\(\"\K[^"]+"); echo "[OPEN] localhost:$port - $proc"; else echo "[CLOSED] localhost:$port"; fi; done',
       },
       {
         id: 'vpn-show-port-usage', name: 'Show Port Usage', icon: '\u{1F4CA}',
@@ -269,8 +269,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-restart-all', name: 'Restart All VPN Services', icon: '\u{1F504}',
-        description: 'One-click restart all VPN-related services (xray, nginx, stunnel, dropbear, etc.)',
-        script: 'echo "=== RESTARTING VPN SERVICES ===" && for svc in xray nginx stunnel4 stunnel dropbear openvpn squid haproxy; do if systemctl list-units --type=service --all | grep -q "$svc"; then systemctl restart $svc 2>/dev/null && echo "[OK] $svc restarted" || echo "[FAIL] $svc failed to restart"; fi; done && echo "" && echo "=== ALL SERVICES RESTARTED ==="',
+        description: 'One-click restart all JinGGo VPN services (xray, xray@none, xray@xhttp, dropbear, ssh)',
+        script: 'echo "=== RESTARTING VPN SERVICES (JinGGo) ===" && for svc in xray xray@none xray@xhttp dropbear ssh; do systemctl restart $svc 2>/dev/null && echo "[OK] $svc restarted" || echo "[SKIP] $svc not found"; done && echo "" && echo "=== ALL SERVICES RESTARTED ==="',
         warning: 'This will briefly disconnect all active VPN users!',
       },
       {
@@ -361,8 +361,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-list-users', name: 'List VPN Users', icon: '\u{1F4CB}',
-        description: 'Show all VPN user accounts with expiry dates and status (JinGGo compatible)',
-        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME          EXP DATE          STATUS" && echo "---------------------------------------------------" && while IFS=: read -r user _ uid _ _ _ _; do if [ "$uid" -ge 1000 ] 2>/dev/null && [ "$uid" -lt 65534 ] 2>/dev/null; then exp=$(chage -l "$user" 2>/dev/null | grep "Account expires" | awk -F": " \'{print $2}\'); status=$(passwd -S "$user" 2>/dev/null | awk \'{print $2}\'); if [ "$status" = "L" ]; then st="LOCKED"; else st="ACTIVE"; fi; printf "%-17s %-17s %s\n" "$user" "$exp" "$st"; fi; done < /etc/passwd && echo "---------------------------------------------------" && total=$(awk -F: \'$3 >= 1000 && $3 < 65534{c++} END{print c+0}\' /etc/passwd) && echo "Total accounts: $total user(s)"',
+        description: 'Show all xray VPN user accounts with expiry dates (JinGGo compatible)',
+        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME            EXPIRY DATE         STATUS" && echo "---------------------------------------------------" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); exp=$(echo "$line" | awk "{print \$3}"); today=$(date +%Y-%m-%d); if [ "$exp" \> "$today" ] || [ "$exp" = "$today" ]; then st="ACTIVE"; else st="EXPIRED"; fi; printf "%-19s %-19s %s\n" "$user" "$exp" "$st"; done && echo "---------------------------------------------------" && total=$(grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | wc -l) && echo "Total accounts: $total user(s)"',
       },
     ],
   },
