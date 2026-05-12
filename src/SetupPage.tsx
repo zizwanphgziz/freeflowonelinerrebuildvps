@@ -423,6 +423,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [pasteText, setPasteText] = useState('')
   const [showSelectText, setShowSelectText] = useState(false)
   const [selectBuffer, setSelectBuffer] = useState('')
+  const [showKeyboard, setShowKeyboard] = useState(false)
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
@@ -1187,8 +1188,17 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           {/* Fullscreen terminal body */}
-          <div ref={fullscreenTermRef} className="flex-1 min-h-0 overflow-hidden pb-2" />
+          <div ref={fullscreenTermRef} className="flex-1 min-h-0 overflow-hidden" />
+          {/* Floating keyboard toggle button */}
+          {!showKeyboard && (
+            <button onClick={() => setShowKeyboard(true)}
+              className="fixed bottom-4 right-4 z-[70] w-12 h-12 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              title="Show keyboard toolbar">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2" strokeWidth={2}/><path strokeWidth={2} d="M6 8h1M10 8h1M14 8h1M18 8h1M6 12h1M18 12h1M9 12h6" strokeLinecap="round"/><path strokeWidth={2} d="M8 16h8" strokeLinecap="round"/></svg>
+            </button>
+          )}
           {/* Keyboard toolbar - Termius-style rows */}
+          {showKeyboard && (
           <div className="bg-slate-900/95 border-t border-slate-800/40 flex-shrink-0">
             {/* Row 1: Menu + Ctrl toggle + special keys + extra symbols */}
             <div className="flex items-center gap-1 px-1.5 py-1 overflow-x-auto">
@@ -1248,6 +1258,12 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 &amp;
               </button>
+              {/* Close keyboard button */}
+              <button onClick={() => setShowKeyboard(false)}
+                className="px-2.5 py-2 rounded-lg bg-red-900/50 hover:bg-red-800/50 text-red-300 text-xs font-bold transition-colors active:bg-red-500/30 flex-shrink-0 ml-auto"
+                title="Hide keyboard">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
             {/* Row 2: Arrow keys */}
             <div className="flex items-center justify-center gap-1 px-1.5 pb-1.5">
@@ -1269,6 +1285,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </button>
             </div>
           </div>
+          )}
 
           {/* Paste Input Dialog (fallback for HTTP) */}
           {showPasteInput && (
