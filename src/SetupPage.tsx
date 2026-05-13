@@ -34,6 +34,118 @@ interface ToolEntry {
   requiresInput?: { label: string; placeholder: string; key: string; options?: string[] }[]
 }
 
+interface OSVersion {
+  version: string
+  codename?: string
+  script: string
+}
+
+interface OSGroup {
+  id: string
+  name: string
+  icon: string
+  color: string
+  category: 'linux' | 'windows'
+  description: string
+  versions: OSVersion[]
+}
+
+const osGroups: OSGroup[] = [
+  { id: 'debian', name: 'Debian', icon: '\u{1F300}', color: '#A80030', category: 'linux', description: 'Rock-solid stability for servers.', versions: [
+    { version: '13', codename: 'Trixie', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 13 && reboot' },
+    { version: '12', codename: 'Bookworm', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 12 && reboot' },
+    { version: '11', codename: 'Bullseye', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 11 && reboot' },
+    { version: '10', codename: 'Buster', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 10 && reboot' },
+    { version: '9', codename: 'Stretch', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 9 && reboot' },
+  ]},
+  { id: 'ubuntu', name: 'Ubuntu', icon: '\u{1F7E0}', color: '#E95420', category: 'linux', description: 'Most popular Linux for cloud & VPS.', versions: [
+    { version: '26.04', codename: 'Resolute Raccoon', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 26.04 && reboot' },
+    { version: '24.04', codename: 'Noble Numbat', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 24.04 && reboot' },
+    { version: '22.04', codename: 'Jammy Jellyfish', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 22.04 && reboot' },
+    { version: '20.04', codename: 'Focal Fossa', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 20.04 && reboot' },
+    { version: '18.04', codename: 'Bionic Beaver', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 18.04 && reboot' },
+  ]},
+  { id: 'centos', name: 'CentOS', icon: '\u{1F7E3}', color: '#932279', category: 'linux', description: 'Community-driven enterprise Linux.', versions: [
+    { version: '9 Stream', codename: 'Stream', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) centos 9 && reboot' },
+    { version: '8 Stream', codename: 'Stream', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) centos 8 && reboot' },
+    { version: '7', codename: 'Final', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) centos 7 && reboot' },
+  ]},
+  { id: 'almalinux', name: 'AlmaLinux', icon: '\u{1F535}', color: '#0F4266', category: 'linux', description: '1:1 binary compatible with RHEL.', versions: [
+    { version: '10', codename: 'Purple Manul', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alma 10 && reboot' },
+    { version: '9', codename: 'Emerald Puma', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alma 9 && reboot' },
+    { version: '8', codename: 'Cerulean Leopard', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alma 8 && reboot' },
+  ]},
+  { id: 'rocky', name: 'Rocky Linux', icon: '\u{1F7E2}', color: '#10B981', category: 'linux', description: 'Bug-for-bug RHEL compatible.', versions: [
+    { version: '10', codename: 'Obsidian Owl', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) rocky 10 && reboot' },
+    { version: '9', codename: 'Blue Onyx', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) rocky 9 && reboot' },
+    { version: '8', codename: 'Green Obsidian', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) rocky 8 && reboot' },
+  ]},
+  { id: 'fedora', name: 'Fedora', icon: '\u{1F3A9}', color: '#3C6EB4', category: 'linux', description: 'Cutting-edge from Red Hat.', versions: [
+    { version: '44', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) fedora 44 && reboot' },
+    { version: '43', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) fedora 43 && reboot' },
+    { version: '42', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) fedora 42 && reboot' },
+    { version: '41', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) fedora 41 && reboot' },
+    { version: '40', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) fedora 40 && reboot' },
+  ]},
+  { id: 'arch', name: 'Arch Linux', icon: '\u{1F3D4}\u{FE0F}', color: '#1793D1', category: 'linux', description: 'Lightweight rolling-release.', versions: [
+    { version: 'Latest', codename: 'Rolling', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) arch && reboot' },
+  ]},
+  { id: 'opensuse', name: 'openSUSE', icon: '\u{1F98E}', color: '#73BA25', category: 'linux', description: 'Stable with YaST management.', versions: [
+    { version: 'Tumbleweed', codename: 'Rolling', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) opensuse tumbleweed && reboot' },
+    { version: '15.6', codename: 'Leap', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) opensuse 15.6 && reboot' },
+  ]},
+  { id: 'alpine', name: 'Alpine Linux', icon: '\u{26F0}\u{FE0F}', color: '#0D597F', category: 'linux', description: 'Security-oriented, lightweight.', versions: [
+    { version: '3.23', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alpine 3.23 && reboot' },
+    { version: '3.22', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alpine 3.22 && reboot' },
+    { version: '3.21', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alpine 3.21 && reboot' },
+    { version: '3.20', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alpine 3.20 && reboot' },
+  ]},
+  { id: 'oracle', name: 'Oracle Linux', icon: '\u{1F534}', color: '#C74634', category: 'linux', description: 'Enterprise with Ksplice support.', versions: [
+    { version: '10', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) oracle 10 && reboot' },
+    { version: '9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) oracle 9 && reboot' },
+    { version: '8', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) oracle 8 && reboot' },
+  ]},
+  { id: 'gentoo', name: 'Gentoo', icon: '\u{1F427}', color: '#54487A', category: 'linux', description: 'Source-based, ultimate customization.', versions: [
+    { version: 'Latest', codename: 'Rolling', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) gentoo && reboot' },
+  ]},
+  { id: 'nixos', name: 'NixOS', icon: '\u{2744}\u{FE0F}', color: '#5277C3', category: 'linux', description: 'Declarative, reproducible Linux.', versions: [
+    { version: '24.11', codename: 'Vicuna', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) nixos 24.11 && reboot' },
+    { version: '24.05', codename: 'Uakari', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) nixos 24.05 && reboot' },
+  ]},
+  { id: 'kali', name: 'Kali Linux', icon: '\u{1F409}', color: '#557C94', category: 'linux', description: 'Penetration testing distro.', versions: [
+    { version: 'Latest', codename: 'Rolling', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) kali && reboot' },
+  ]},
+  { id: 'anolis', name: 'Anolis OS', icon: '\u{1F41C}', color: '#1E90FF', category: 'linux', description: 'Cloud-native by Alibaba Cloud.', versions: [
+    { version: '23', codename: 'Innovation', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) anolis 23 && reboot' },
+    { version: '8', codename: 'Stable', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) anolis 8 && reboot' },
+    { version: '7', codename: 'Classic', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) anolis 7 && reboot' },
+  ]},
+  { id: 'opencloudos', name: 'OpenCloudOS', icon: '\u{2601}\u{FE0F}', color: '#FF6600', category: 'linux', description: 'Cloud OS by Tencent.', versions: [
+    { version: '9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) opencloudos 9 && reboot' },
+    { version: '8', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) opencloudos 8 && reboot' },
+  ]},
+  { id: 'windows-server-2022', name: 'Windows Server 2022', icon: '\u{1FA9F}', color: '#0078D4', category: 'windows', description: 'Latest Windows Server with advanced security.', versions: [
+    { version: 'Standard', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2022 SERVERSTANDARDCORE' && reboot" },
+    { version: 'Datacenter', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2022 SERVERDATACENTERCORE' && reboot" },
+  ]},
+  { id: 'windows-server-2019', name: 'Windows Server 2019', icon: '\u{1FA9F}', color: '#00A4EF', category: 'windows', description: 'Mature, widely used in production.', versions: [
+    { version: 'Standard', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2019 SERVERSTANDARDCORE' && reboot" },
+    { version: 'Datacenter', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2019 SERVERDATACENTERCORE' && reboot" },
+  ]},
+  { id: 'windows-server-2016', name: 'Windows Server 2016', icon: '\u{1FA9F}', color: '#00BCF2', category: 'windows', description: 'Legacy, still in extended support.', versions: [
+    { version: 'Standard', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2016 SERVERSTANDARDCORE' && reboot" },
+    { version: 'Datacenter', codename: 'LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows Server 2016 SERVERDATACENTERCORE' && reboot" },
+  ]},
+  { id: 'windows-11', name: 'Windows 11', icon: '\u{1FA9F}', color: '#0078D4', category: 'windows', description: 'Latest Windows desktop OS.', versions: [
+    { version: 'Pro', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows 11 Pro' && reboot" },
+    { version: 'Enterprise', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows 11 Enterprise' && reboot" },
+  ]},
+  { id: 'windows-10', name: 'Windows 10', icon: '\u{1FA9F}', color: '#00A4EF', category: 'windows', description: 'Widely deployed, well-supported.', versions: [
+    { version: 'Pro', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows 10 Pro' && reboot" },
+    { version: 'Enterprise LTSC', script: "bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) windows --image-name 'Windows 10 Enterprise LTSC' && reboot" },
+  ]},
+]
+
 // ─── One-Click Tools Data ────────────────────────────────────────────────────
 
 const toolCategories: ToolCategory[] = [
@@ -42,15 +154,7 @@ const toolCategories: ToolCategory[] = [
     name: 'OS Rebuild',
     icon: '\u{1F4BF}',
     color: '#14F5C8',
-    tools: [
-      { id: 'rebuild-debian-13', name: 'Debian 13 Trixie', icon: '\u{1F300}', description: 'Rebuild to Debian 13', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 13 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-debian-12', name: 'Debian 12 Bookworm', icon: '\u{1F300}', description: 'Rebuild to Debian 12', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) debian 12 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-ubuntu-2604', name: 'Ubuntu 26.04', icon: '\u{1F7E0}', description: 'Rebuild to Ubuntu 26.04 LTS', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 26.04 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-ubuntu-2404', name: 'Ubuntu 24.04', icon: '\u{1F7E0}', description: 'Rebuild to Ubuntu 24.04 LTS', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ubuntu 24.04 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-centos-9', name: 'CentOS 9 Stream', icon: '\u{1F7E3}', description: 'Rebuild to CentOS 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) centos 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-alma-9', name: 'AlmaLinux 9', icon: '\u{1F535}', description: 'Rebuild to AlmaLinux 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) alma 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-      { id: 'rebuild-rocky-9', name: 'Rocky Linux 9', icon: '\u{1F7E2}', description: 'Rebuild to Rocky Linux 9', script: 'bash <(curl -fsSL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) rocky 9 && reboot', warning: 'This will ERASE all data and reinstall the OS!' },
-    ],
+    tools: [],
   },
   {
     id: 'server-setup',
@@ -130,7 +234,7 @@ const toolCategories: ToolCategory[] = [
         script: 'apt-get update -y && apt-get install -y nginx && systemctl enable nginx && systemctl start nginx && nginx -v && echo "Nginx installed and running!"',
         uninstallScript: 'systemctl stop nginx && apt-get purge -y nginx nginx-common nginx-full && rm -rf /etc/nginx && echo "Nginx removed successfully"',
         uninstallDescription: 'Remove Nginx and all configs',
-        warning: 'JinGGo/autoscript VPN already uses Nginx! This may overwrite your VPN nginx config.',
+        warning: 'Your VPN autoscript may already use Nginx! This may overwrite your VPN nginx config.',
       },
     ],
   },
@@ -229,13 +333,13 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-check-services', name: 'Check All VPN Services', icon: '\u{1F4CB}',
-        description: 'Show status of all JinGGo VPN services (xray, xray@none, xray@xhttp, dropbear, ssh, fail2ban)',
-        script: 'echo "=== VPN SERVICES STATUS (JinGGo) ===" && for svc in xray xray@none xray@xhttp dropbear ssh fail2ban caddy; do echo ""; echo "--- $svc ---"; systemctl is-active $svc 2>/dev/null && systemctl status $svc --no-pager -l 2>/dev/null | head -5 || echo "[NOT RUNNING]"; done && echo "" && echo "=== DONE ==="',
+        description: 'Show status of common VPN services (xray, dropbear, ssh, fail2ban, nginx, caddy)',
+        script: 'echo "=== VPN SERVICES STATUS ===" && for svc in xray xray@none xray@xhttp dropbear ssh fail2ban caddy nginx stunnel4 openvpn; do if systemctl list-unit-files $svc.service >/dev/null 2>&1; then status=$(systemctl is-active $svc 2>/dev/null); if [ "$status" != "inactive" ] && [ "$status" != "unknown" ]; then echo "" && echo "--- $svc ---" && systemctl status $svc --no-pager -l 2>/dev/null | head -5; fi; fi; done && echo "" && echo "=== DONE ==="',
       },
       {
         id: 'vpn-active-connections', name: 'Show Active Connections', icon: '\u{1F465}',
-        description: 'Show logged-in SSH, Dropbear & xray users (JinGGo compatible)',
-        script: 'echo "=== ACTIVE VPN CONNECTIONS (JinGGo) ===" && echo "" && echo "--- SSH/Dropbear Sessions ---" && who 2>/dev/null && echo "" && echo "--- Xray Active Connections ---" && if [ -f /var/log/xray/access.log ]; then echo "Recent connections:"; tail -20 /var/log/xray/access.log 2>/dev/null | grep -oP "email: [^ ]+" | sort | uniq -c | sort -rn; else echo "No xray access log"; fi && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l',
+        description: 'Show logged-in SSH, Dropbear & xray users with active connections',
+        script: 'echo "=== ACTIVE VPN CONNECTIONS ===" && echo "" && echo "--- SSH/Dropbear Sessions ---" && who 2>/dev/null && echo "" && echo "--- Xray Active Connections ---" && if [ -f /var/log/xray/access.log ]; then echo "Recent connections:"; tail -20 /var/log/xray/access.log 2>/dev/null | grep -oP "email: [^ ]+" | sort | uniq -c | sort -rn; else echo "No xray access log"; fi && echo "" && echo "--- Total established connections ---" && ss -tn state established | wc -l',
       },
       {
         id: 'vpn-bandwidth-monitor', name: 'Monitor Bandwidth Live', icon: '\u{1F4C8}',
@@ -251,8 +355,8 @@ const toolCategories: ToolCategory[] = [
       },
       {
         id: 'vpn-test-ports', name: 'Test All VPN Ports', icon: '\u{1F50C}',
-        description: 'Quick check if JinGGo VPN ports are listening (xray, SSH, Dropbear, etc.)',
-        script: 'echo "=== VPN PORT CHECK (JinGGo) ===" && echo "--- TCP Ports ---" && for port in 22 80 109 110 443 2222 5443 8080 8880; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\(\(\"\K[^"]+"); echo "[OPEN] TCP $port - $proc"; else echo "[CLOSED] TCP $port"; fi; done && echo "" && echo "--- Localhost Ports ---" && for port in 1318 7200 7300 20241 40000; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then proc=$(echo "$result" | grep -oP "users:\(\(\"\K[^"]+"); echo "[OPEN] localhost:$port - $proc"; else echo "[CLOSED] localhost:$port"; fi; done',
+        description: 'Quick check which VPN-related ports are listening (auto-detects all open ports)',
+        script: 'echo "=== VPN PORT CHECK ===" && echo "--- All Listening TCP Ports ---" && ss -tlnp 2>/dev/null | awk "NR>1{print}" | sort -t: -k2 -n && echo "" && echo "--- Common VPN Ports ---" && for port in 22 80 109 110 143 222 443 444 777 2082 2087 2096 3128 7100 7300 8080 8443 8880; do result=$(ss -tlnp | grep ":$port " | head -1); if [ -n "$result" ]; then echo "[OPEN] TCP $port"; fi; done',
       },
       {
         id: 'vpn-show-port-usage', name: 'Show Port Usage', icon: '\u{1F4CA}',
@@ -269,8 +373,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-restart-all', name: 'Restart All VPN Services', icon: '\u{1F504}',
-        description: 'One-click restart all JinGGo VPN services (xray, xray@none, xray@xhttp, dropbear, ssh)',
-        script: 'echo "=== RESTARTING VPN SERVICES (JinGGo) ===" && for svc in xray xray@none xray@xhttp dropbear ssh; do systemctl restart $svc 2>/dev/null && echo "[OK] $svc restarted" || echo "[SKIP] $svc not found"; done && echo "" && echo "=== ALL SERVICES RESTARTED ==="',
+        description: 'One-click restart all detected VPN services (xray, dropbear, ssh, stunnel, nginx, etc.)',
+        script: 'echo "=== RESTARTING VPN SERVICES ===" && for svc in xray xray@none xray@xhttp dropbear ssh stunnel4 nginx caddy openvpn fail2ban; do if systemctl is-active $svc >/dev/null 2>&1; then systemctl restart $svc 2>/dev/null && echo "[OK] $svc restarted" || echo "[FAIL] $svc"; fi; done && echo "" && echo "=== ALL ACTIVE SERVICES RESTARTED ==="',
         warning: 'This will briefly disconnect all active VPN users!',
       },
       {
@@ -361,8 +465,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       {
         id: 'vpn-list-users', name: 'List VPN Users', icon: '\u{1F4CB}',
-        description: 'Show all xray VPN user accounts with expiry, status & active connections (JinGGo compatible)',
-        script: 'echo "=== VPN USER ACCOUNTS (JinGGo) ===" && echo "" && echo "USERNAME            EXPIRY DATE         STATUS      CONNECTIONS" && echo "--------------------------------------------------------------" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); exp=$(echo "$line" | awk "{print \$3}"); today=$(date +%Y-%m-%d); if [ "$exp" \> "$today" ] || [ "$exp" = "$today" ]; then st="ACTIVE"; else st="EXPIRED"; fi; conns=$(grep -c "$user" /var/log/xray/access.log 2>/dev/null || echo 0); printf "%-19s %-19s %-11s %s\n" "$user" "$exp" "$st" "$conns hits"; done && echo "--------------------------------------------------------------" && total=$(grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | wc -l) && echo "Total accounts: $total user(s)" && echo "" && echo "=== ACTIVE IPs PER USER ===" && grep "^###" /usr/local/etc/xray/config.json 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); echo "" && echo "--- $user ---"; grep "$user" /var/log/xray/access.log 2>/dev/null | grep -oP "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | sort | uniq -c | sort -rn | head -10 || echo "No connections found"; done',
+        description: 'Show all VPN user accounts with expiry, status & active connections',
+        script: 'echo "=== VPN USER ACCOUNTS ===" && echo "" && CFGFILE=""; for f in /usr/local/etc/xray/config.json /etc/xray/config.json /etc/v2ray/config.json; do if [ -f "$f" ] && grep -q "^###" "$f" 2>/dev/null; then CFGFILE="$f"; break; fi; done && if [ -z "$CFGFILE" ]; then echo "No VPN user config found (checked xray/v2ray config paths)"; echo "Your autoscript may store users differently."; else echo "Config: $CFGFILE" && echo "" && echo "USERNAME            EXPIRY DATE         STATUS      CONNECTIONS" && echo "--------------------------------------------------------------" && grep "^###" "$CFGFILE" 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); exp=$(echo "$line" | awk "{print \$3}"); today=$(date +%Y-%m-%d); if [ "$exp" \> "$today" ] || [ "$exp" = "$today" ]; then st="ACTIVE"; else st="EXPIRED"; fi; conns=$(grep -c "$user" /var/log/xray/access.log 2>/dev/null || echo 0); printf "%-19s %-19s %-11s %s\n" "$user" "$exp" "$st" "$conns hits"; done && echo "--------------------------------------------------------------" && total=$(grep "^###" "$CFGFILE" 2>/dev/null | sort -u | wc -l) && echo "Total accounts: $total user(s)" && echo "" && echo "=== ACTIVE IPs PER USER ===" && grep "^###" "$CFGFILE" 2>/dev/null | sort -u | while read -r line; do user=$(echo "$line" | awk "{print \$2}"); echo "" && echo "--- $user ---"; grep "$user" /var/log/xray/access.log 2>/dev/null | grep -oP "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | sort | uniq -c | sort -rn | head -10 || echo "No connections found"; done; fi',
       },
     ],
   },
@@ -424,6 +528,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [showSelectText, setShowSelectText] = useState(false)
   const [selectBuffer, setSelectBuffer] = useState('')
   const [showKeyboard, setShowKeyboard] = useState(false)
+  const [selectedOS, setSelectedOS] = useState<string | null>(null)
 
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
@@ -500,25 +605,6 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
       case '|': wsRef.current?.send(JSON.stringify({ type: 'input', data: '|' })); break
       case '\\': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\\' })); break
       default: wsRef.current?.send(JSON.stringify({ type: 'input', data: key })); break
-    }
-  }
-
-  // Copy selected text from terminal (with HTTP fallback)
-  const copySelection = () => {
-    if (!termRef.current) return
-    const sel = termRef.current.getSelection()
-    if (!sel) return
-    try {
-      navigator.clipboard.writeText(sel)
-    } catch {
-      const ta = document.createElement('textarea')
-      ta.value = sel
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
     }
   }
 
@@ -1105,7 +1191,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                     All
                   </button>
                   {toolCategories.map((cat) => (
-                    <button key={cat.id} onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+                    <button key={cat.id} onClick={() => { setSelectedCategory(selectedCategory === cat.id ? null : cat.id); setSelectedOS(null) }}
                       className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${selectedCategory === cat.id ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-transparent hover:text-slate-300'}`}>
                       {cat.icon} {cat.name}
                     </button>
@@ -1124,7 +1210,92 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </div>
 
               <div className="p-3 space-y-4 max-h-[500px] overflow-y-auto">
-                {filteredTools.map((cat) => (
+                {/* OS Rebuild Section — category → version drill-down */}
+                {(!selectedCategory || selectedCategory === 'os-rebuild') && (
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <span>{'\u{1F4BF}'}</span> OS Rebuild
+                    </h3>
+                    {!selectedOS ? (
+                      /* Show OS category cards */
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {osGroups
+                          .filter(os => !toolSearch || os.name.toLowerCase().includes(toolSearch.toLowerCase()) || os.description.toLowerCase().includes(toolSearch.toLowerCase()))
+                          .map((os) => (
+                          <button key={os.id}
+                            onClick={() => setSelectedOS(os.id)}
+                            className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-slate-800/60 hover:border-emerald-500/30 hover:bg-slate-800/40 transition-all text-center cursor-pointer">
+                            <span className="text-2xl">{os.icon}</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors">{os.name}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">{os.versions.length} version{os.versions.length !== 1 ? 's' : ''}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Show versions of selected OS */
+                      (() => {
+                        const os = osGroups.find(o => o.id === selectedOS)
+                        if (!os) return null
+                        return (
+                          <div>
+                            <button onClick={() => setSelectedOS(null)}
+                              className="flex items-center gap-1.5 mb-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors text-xs font-medium">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                              Back to OS List
+                            </button>
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-2xl">{os.icon}</span>
+                              <div>
+                                <p className="text-sm font-bold text-slate-200">{os.name}</p>
+                                <p className="text-xs text-slate-500">{os.description}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {os.versions.map((ver) => (
+                                <button key={ver.version}
+                                  onClick={() => {
+                                    if (!isConnected) return
+                                    setConfirmTool({
+                                      id: `rebuild-${os.id}-${ver.version}`,
+                                      name: `${os.name} ${ver.version}${ver.codename ? ` (${ver.codename})` : ''}`,
+                                      icon: os.icon,
+                                      description: `Rebuild to ${os.name} ${ver.version}${ver.codename ? ' ' + ver.codename : ''}`,
+                                      script: ver.script,
+                                      warning: 'This will ERASE all data and reinstall the OS!',
+                                    })
+                                    setToolInputs({})
+                                  }}
+                                  disabled={!isConnected}
+                                  className={`group flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${isConnected ? 'border-slate-800/60 hover:border-emerald-500/30 hover:bg-slate-800/40 cursor-pointer' : 'border-slate-800/30 opacity-50 cursor-not-allowed'}`}>
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: os.color + '20', borderColor: os.color + '40', borderWidth: 1 }}>
+                                    <span className="text-sm font-bold" style={{ color: os.color }}>{ver.version.slice(0, 3)}</span>
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors">
+                                      {os.name} {ver.version}
+                                    </p>
+                                    {ver.codename && <p className="text-xs text-slate-500">{ver.codename}</p>}
+                                  </div>
+                                  {isConnected && (
+                                    <svg className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 flex-shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()
+                    )}
+                  </div>
+                )}
+                {/* Other tool categories (non-OS-rebuild) */}
+                {filteredTools.filter(cat => cat.id !== 'os-rebuild').map((cat) => (
                   <div key={cat.id}>
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                       <span>{cat.icon}</span> {cat.name}
