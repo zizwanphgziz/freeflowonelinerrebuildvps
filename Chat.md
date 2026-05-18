@@ -178,7 +178,7 @@ wget https://raw.githubusercontent.com/JinGGoVPN/DATA/main/script/monthly/setup.
 - IP: 43.245.60.203
 - Port: 22
 - Username: root
-- Password: DymNe6pV
+- Password: [REDACTED]
 
 **Devin:** SSH'd into VPS (read-only) and found JinGGo stores VPN users as comments in xray config (`### username expiry-date`). Updated the "List VPN Users" tool to parse this format correctly.
 
@@ -251,6 +251,29 @@ wget https://raw.githubusercontent.com/JinGGoVPN/DATA/main/script/monthly/setup.
 6. Updated vpn-autoscript-research.md to 25 scripts (added DarQan as #24)
 7. Deployed to both GitHub Pages and devinapps.com
 8. Updated Chat.md and Progress.md with final progress
+
+**Ahmad:** Asked how to keep the backend alive through VPS reboots (systemd).
+
+**Devin:** Created `backend/freeflow.service` systemd service file. Pushed to repo. Ahmad set it up:
+```bash
+cp ~/freeflowonelinerrebuildvps/backend/freeflow.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable freeflow
+systemctl start freeflow
+```
+Backend now auto-starts on boot and auto-restarts if it crashes.
+
+**Ahmad:** Confirmed working — VPS rebooted and website stayed online.
+
+**Ahmad:** Asked to fully update all files in GitHub repo for next session continuity.
+
+**Devin:** Audited all 35 tracked files. Updated:
+- `README.md` — Completely rewritten to cover all features (SSH terminal, VPN tools, autoscript installers, self-hosting, systemd)
+- `Chat.md` — Added systemd setup, redacted VPS password for security
+- `Progress.md` — Added Milestone 12 (systemd auto-start)
+- Rebuilt and redeployed to gh-pages and devinapps.com
+- Updated backend/static/ with latest build
+- Updated PR description
 
 ---
 

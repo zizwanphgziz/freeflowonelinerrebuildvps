@@ -231,6 +231,18 @@ Also researched and added darul-itqan/Auto-Script-VPS-SSH-WS-VLESS-WS (DarQan Sc
 
 ---
 
+## Milestone 12: systemd Auto-Start & Full Repo Update
+**Status:** Completed
+
+- Created `backend/freeflow.service` — systemd service file for auto-start on boot
+- Backend auto-restarts if it crashes (RestartSec=5)
+- Updated `BACKEND_SETUP.md` with systemd setup instructions and management commands
+- Updated `README.md` — completely rewritten to cover all features (SSH terminal, VPN tools, autoscript installers, self-hosting, systemd)
+- Redacted VPS password from `Chat.md` (security concern for public repo)
+- Full repo audit — verified all 35 tracked files are current and consistent
+
+---
+
 ## Technical Architecture
 
 ```
