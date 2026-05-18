@@ -190,17 +190,44 @@ Comprehensive research document (`vpn-autoscript-research.md`) with 24+ open-sou
 ---
 
 ## Milestone 10: VPN Autoscript Installers as One-Click Tools
-**Status:** In Progress
+**Status:** Completed
 
-Adding all researched VPN autoscripts as installable options in the Freeflow website. Also adding darul-itqan/Auto-Script-VPS-SSH-WS-VLESS-WS (DarQan script).
+Added 21 VPN autoscript installers as one-click tools in the Freeflow website under new `vpn-autoscript` category:
+
+1. Dotycat Tunnel — VLESS/VMess/Trojan WS/gRPC/xHTTP + SSH WS + OpenVPN (28 stars)
+2. Vinstech Lite — VLESS/VMess/Trojan WS/gRPC + SSH + SlowDNS (30 stars)
+3. Vinstech MiniXLite — VLESS/VMess/Trojan + SSH + NoobzVPN
+4. Vinstech Multiport — VLESS/VMess/Trojan + SSH + NoobzVPN + multi-port
+5. Decode Reality — VLess Reality + VLess WS (modern Xray-core)
+6. FN Project (Rerechan) — VLESS/VMess/Trojan/SS + SSH + ALL OS (23 stars)
+7. DarQan Script — SSH WS + VLESS WS, IP/data limits, auto-delete
+8. GegeVPS — VLESS/VMess/Trojan/SS2022 + SSH + OpenVPN
+9. KingKongVPN — SSH + VLESS/VMess/Trojan WS/gRPC + OpenVPN
+10. Netz-Xray — 110 contributors, SSH + VLESS/VMess/Trojan (62 stars)
+11. GIVPN — Xray VLESS/VMess/Trojan/SS + SSH + UDP
+12. FarellVPN — VLESS/VMess/Trojan + SSH + modern UI
+13. SL Mantap AIO — SSH + VLESS/VMess/Trojan + SlowDNS
+14. PR Aiman AIO — 13+ protocols, SSH + Xray + OpenVPN + WireGuard
+15. SCVPS AIO — SSH + Xray VLESS/VMess/Trojan + SlowDNS
+16. Caliph Dev — VLESS/Trojan WS/gRPC + SSH + multi-panel
+17. 233boy Xray — 2.2K stars, VLESS/VMess/Trojan/SS/Reality
+18. One Click Script — 5.1K stars, Xray + Nginx + Cloudflare
+19. afandiazmi 8-in-1 — SSH/VLESS/VMess/Trojan/SS/OpenVPN/WireGuard/SlowDNS
+20. SenoVPN — SSH + VLESS/VMess WS + NoobzVPN
+21. RasCom AIO — SSH + VLESS/VMess/Trojan + SlowDNS + UDP
+22. GIVPS + Tor — SSH + V2Ray + OpenVPN + Tor relay
+
+Also researched and added darul-itqan/Auto-Script-VPS-SSH-WS-VLESS-WS (DarQan Script) to research document.
 
 ---
 
 ## Milestone 11: Project Documentation
-**Status:** In Progress
+**Status:** Completed
 
-- `Chat.md` — Full session conversation history
-- `Progress.md` — This file, all milestones and progress
+- `Chat.md` — Full session conversation history (14 sessions documented)
+- `Progress.md` — This file, all milestones and progress (11 milestones)
+- `vpn-autoscript-research.md` — 25 open-source VPN autoscript installers researched
+- All documentation updated after VPN autoscript implementation
 
 ---
 
@@ -211,7 +238,7 @@ freeflowonelinerrebuildvps/
 ├── src/
 │   ├── App.tsx           — Main app with tab navigation (OS Rebuild / One-Clicked VPS Setup)
 │   ├── App.css           — Global styles
-│   └── SetupPage.tsx     — SSH terminal + one-click tools (1600+ lines)
+│   └── SetupPage.tsx     — SSH terminal + one-click tools (1768+ lines, includes 21 VPN autoscript installers)
 ├── backend/
 │   ├── app/
 │   │   └── main.py       — FastAPI WebSocket SSH proxy
