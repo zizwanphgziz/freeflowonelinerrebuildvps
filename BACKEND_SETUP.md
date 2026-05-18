@@ -50,7 +50,51 @@ The backend serves both the API and the frontend — everything runs on port 800
 - **No HTTPS needed** — Works over plain HTTP since everything is on the same origin
 - **JinGGo VPN compatible** — All one-click tools are tested with JinGGo autoscript
 
-## Managing the Backend
+## Auto-Start on Boot (systemd) — Recommended
+
+Set up the backend to auto-start on VPS boot and auto-restart if it crashes:
+
+```bash
+# 1. Copy the service file
+cp ~/freeflowonelinerrebuildvps/backend/freeflow.service /etc/systemd/system/
+
+# 2. Enable and start the service
+systemctl daemon-reload
+systemctl enable freeflow
+systemctl start freeflow
+```
+
+Now the backend will:
+- **Auto-start** every time your VPS reboots
+- **Auto-restart** if it crashes (after 5 seconds)
+- Run in the background as a proper system service
+
+**If you were using `nohup` before**, stop the old process first:
+```bash
+kill $(lsof -t -i:8000) 2>/dev/null
+systemctl start freeflow
+```
+
+## Managing the Backend (systemd)
+
+```bash
+# Check status
+systemctl status freeflow
+
+# View logs
+journalctl -u freeflow -f
+
+# Stop the backend
+systemctl stop freeflow
+
+# Restart the backend
+systemctl restart freeflow
+
+# Disable auto-start on boot
+systemctl disable freeflow
+```
+
+## Managing the Backend (manual — without systemd)
 
 ```bash
 # Check if backend is running
