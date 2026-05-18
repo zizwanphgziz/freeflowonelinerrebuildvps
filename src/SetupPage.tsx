@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import FileManager from './FileManager'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +13,14 @@ interface SavedHost {
   port: number
   username: string
   password?: string
+}
+
+interface TerminalSession {
+  id: string
+  term: Terminal
+  fitAddon: FitAddon
+  ws: WebSocket
+  containerRef: HTMLDivElement | null
 }
 
 interface ToolCategory {
@@ -48,6 +57,31 @@ interface OSGroup {
   category: 'linux' | 'windows'
   description: string
   versions: OSVersion[]
+}
+
+const MAX_TERMINAL_WINDOWS = 4
+const TERMINAL_THEME = {
+  background: '#0B1222',
+  foreground: '#E2E8F0',
+  cursor: '#14F5C8',
+  cursorAccent: '#0B1222',
+  selectionBackground: '#14F5C833',
+  black: '#1E293B',
+  red: '#F87171',
+  green: '#14F5C8',
+  yellow: '#FBBF24',
+  blue: '#60A5FA',
+  magenta: '#C084FC',
+  cyan: '#22D3EE',
+  white: '#F1F5F9',
+  brightBlack: '#475569',
+  brightRed: '#FCA5A5',
+  brightGreen: '#6EE7B7',
+  brightYellow: '#FDE68A',
+  brightBlue: '#93C5FD',
+  brightMagenta: '#D8B4FE',
+  brightCyan: '#67E8F9',
+  brightWhite: '#F8FAFC',
 }
 
 const osGroups: OSGroup[] = [
@@ -612,7 +646,8 @@ const toolCategories: ToolCategory[] = [
   },
 ]
 
-// ─── LocalStorage helpers ────────────────────────────────────────────────────
+
+// ─── Utility Functions ──────────────────────────────────────────────────────
 
 function loadHosts(): SavedHost[] {
   try {
@@ -670,88 +705,122 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const [showKeyboard, setShowKeyboard] = useState(false)
   const [selectedOS, setSelectedOS] = useState<string | null>(null)
 
+  // Multi-window terminal state
+  const [terminalSessions, setTerminalSessions] = useState<TerminalSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [showFileManager, setShowFileManager] = useState(false)
+
   const terminalRef = useRef<HTMLDivElement>(null)
   const fullscreenTermRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
   const ctrlActiveRef = useRef(false)
+  const sessionsRef = useRef<TerminalSession[]>([])
+
+  // Keep sessionsRef in sync
+  useEffect(() => { sessionsRef.current = terminalSessions }, [terminalSessions])
+
+  // Helper to get the active session
+  const activeSession = terminalSessions.find(s => s.id === activeSessionId) || null
 
   // Save hosts to localStorage whenever they change
   useEffect(() => { saveHosts(hosts) }, [hosts])
 
-  // Cleanup terminal on unmount
+  // Cleanup all terminal sessions on unmount
   useEffect(() => {
     return () => {
-      wsRef.current?.close()
-      termRef.current?.dispose()
+      sessionsRef.current.forEach(s => {
+        s.ws.close()
+        s.term.dispose()
+      })
     }
   }, [])
 
-  // Resize terminal on window resize or fullscreen/font change
+  // Resize active terminal on window resize
   useEffect(() => {
     const handleResize = () => {
-      if (fitAddonRef.current && isConnected) {
-        fitAddonRef.current.fit()
+      if (activeSession && isConnected) {
+        activeSession.fitAddon.fit()
       }
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [isConnected])
+  }, [isConnected, activeSession])
 
   // Move terminal element between inline and fullscreen containers + auto-size font
   useEffect(() => {
-    const termEl = termRef.current?.element
-    if (!termEl || !isConnected) return
+    if (!activeSession || !isConnected) return
+    const termEl = activeSession.term.element
+    if (!termEl) return
 
     const target = isFullscreen ? fullscreenTermRef.current : terminalRef.current
     if (target && !target.contains(termEl)) {
       if (isFullscreen) {
-        // Calculate font size to fit ~80 columns in viewport width
-        const vw = window.innerWidth - 4 // small margin
-        const charRatio = 0.6 // monospace char width / font size ratio
+        const vw = window.innerWidth - 4
+        const charRatio = 0.6
         const optimalSize = Math.floor(vw / 80 / charRatio)
         const fontSize = Math.max(7, Math.min(14, optimalSize))
-        termRef.current!.options.fontSize = fontSize
+        activeSession.term.options.fontSize = fontSize
       } else {
-        termRef.current!.options.fontSize = 14
+        activeSession.term.options.fontSize = 14
       }
       target.appendChild(termEl)
-      setTimeout(() => fitAddonRef.current?.fit(), 50)
+      setTimeout(() => activeSession.fitAddon.fit(), 50)
     }
-  }, [isFullscreen, isConnected])
+  }, [isFullscreen, isConnected, activeSession])
+
+  // When switching active session, move the terminal element into view
+  useEffect(() => {
+    if (!activeSession || !isConnected) return
+    const termEl = activeSession.term.element
+    if (!termEl) return
+
+    // Hide all other session elements
+    terminalSessions.forEach(s => {
+      if (s.id !== activeSessionId && s.term.element) {
+        s.term.element.style.display = 'none'
+      }
+    })
+    termEl.style.display = ''
+
+    const target = isFullscreen ? fullscreenTermRef.current : terminalRef.current
+    if (target && !target.contains(termEl)) {
+      target.appendChild(termEl)
+    }
+    setTimeout(() => activeSession.fitAddon.fit(), 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId, isFullscreen, isConnected])
 
   // Toggle Ctrl modifier
   const toggleCtrl = () => {
     const next = !ctrlActive
     setCtrlActive(next)
     ctrlActiveRef.current = next
-    termRef.current?.focus()
+    activeSession?.term.focus()
   }
 
-  // Send special key to terminal
+  // Send special key to active terminal
   const sendSpecialKey = (key: string) => {
-    if (!termRef.current || !isConnected) return
-    termRef.current.focus()
+    if (!activeSession || !isConnected) return
+    activeSession.term.focus()
+    const ws = activeSession.ws
     switch (key) {
-      case 'Tab': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\t' })); break
-      case 'Esc': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b' })); break
-      case 'Up': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[A' })); break
-      case 'Down': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[B' })); break
-      case 'Left': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[C' })); break
-      case 'Right': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x1b[D' })); break
-      case '-': wsRef.current?.send(JSON.stringify({ type: 'input', data: '-' })); break
-      case '/': wsRef.current?.send(JSON.stringify({ type: 'input', data: '/' })); break
-      case '|': wsRef.current?.send(JSON.stringify({ type: 'input', data: '|' })); break
-      case '\\': wsRef.current?.send(JSON.stringify({ type: 'input', data: '\\' })); break
-      default: wsRef.current?.send(JSON.stringify({ type: 'input', data: key })); break
+      case 'Tab': ws.send(JSON.stringify({ type: 'input', data: '\t' })); break
+      case 'Esc': ws.send(JSON.stringify({ type: 'input', data: '\x1b' })); break
+      case 'Up': ws.send(JSON.stringify({ type: 'input', data: '\x1b[A' })); break
+      case 'Down': ws.send(JSON.stringify({ type: 'input', data: '\x1b[B' })); break
+      case 'Left': ws.send(JSON.stringify({ type: 'input', data: '\x1b[C' })); break
+      case 'Right': ws.send(JSON.stringify({ type: 'input', data: '\x1b[D' })); break
+      case '-': ws.send(JSON.stringify({ type: 'input', data: '-' })); break
+      case '/': ws.send(JSON.stringify({ type: 'input', data: '/' })); break
+      case '|': ws.send(JSON.stringify({ type: 'input', data: '|' })); break
+      case '\\': ws.send(JSON.stringify({ type: 'input', data: '\\' })); break
+      default: ws.send(JSON.stringify({ type: 'input', data: key })); break
     }
   }
 
   // Extract terminal buffer text and show in selectable view
   const openSelectText = () => {
-    if (!termRef.current) return
-    const buf = termRef.current.buffer.active
+    if (!activeSession) return
+    const buf = activeSession.term.buffer.active
     const lines: string[] = []
     for (let i = 0; i < buf.length; i++) {
       const line = buf.getLine(i)
@@ -784,9 +853,9 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   const pasteClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText()
-      if (text && wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: 'input', data: text }))
-        termRef.current?.focus()
+      if (text && activeSession) {
+        activeSession.ws.send(JSON.stringify({ type: 'input', data: text }))
+        activeSession.term.focus()
         return
       }
     } catch {
@@ -797,74 +866,44 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
   }
 
   const submitPaste = () => {
-    if (pasteText && wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'input', data: pasteText }))
+    if (pasteText && activeSession) {
+      activeSession.ws.send(JSON.stringify({ type: 'input', data: pasteText }))
     }
     setShowPasteInput(false)
     setPasteText('')
-    termRef.current?.focus()
+    activeSession?.term.focus()
   }
 
   const sendMenuCommand = () => {
-    if (!wsRef.current || !isConnected) return
-    wsRef.current.send(JSON.stringify({ type: 'input', data: 'menu\n' }))
-    termRef.current?.focus()
+    if (!activeSession || !isConnected) return
+    activeSession.ws.send(JSON.stringify({ type: 'input', data: 'menu\n' }))
+    activeSession.term.focus()
   }
 
-  const initTerminal = useCallback(() => {
-    if (!terminalRef.current) return
+  // Open a new terminal window (up to MAX_TERMINAL_WINDOWS)
+  const openNewTerminal = useCallback(() => {
+    if (!activeHost || !backendUrl) return
+    if (sessionsRef.current.length >= MAX_TERMINAL_WINDOWS) return
 
-    if (termRef.current) {
-      termRef.current.dispose()
-    }
+    setIsConnecting(true)
+    setConnectionError('')
+
+    const sessionId = 'term-' + Date.now()
+
+    // Create a hidden container for this terminal
+    const container = document.createElement('div')
+    container.style.display = 'none'
+    document.body.appendChild(container)
 
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-      theme: {
-        background: '#0B1222',
-        foreground: '#E2E8F0',
-        cursor: '#14F5C8',
-        cursorAccent: '#0B1222',
-        selectionBackground: '#14F5C833',
-        black: '#1E293B',
-        red: '#F87171',
-        green: '#14F5C8',
-        yellow: '#FBBF24',
-        blue: '#60A5FA',
-        magenta: '#C084FC',
-        cyan: '#22D3EE',
-        white: '#F1F5F9',
-        brightBlack: '#475569',
-        brightRed: '#FCA5A5',
-        brightGreen: '#6EE7B7',
-        brightYellow: '#FDE68A',
-        brightBlue: '#93C5FD',
-        brightMagenta: '#D8B4FE',
-        brightCyan: '#67E8F9',
-        brightWhite: '#F8FAFC',
-      },
+      theme: TERMINAL_THEME,
     })
-
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
-    term.open(terminalRef.current)
-    setTimeout(() => fitAddon.fit(), 100)
-
-    termRef.current = term
-    fitAddonRef.current = fitAddon
-    return term
-  }, [])
-
-  const connectSSH = useCallback(() => {
-    if (!activeHost || !backendUrl) return
-
-    setIsConnecting(true)
-    setConnectionError('')
-
-    const term = initTerminal()
-    if (!term) return
+    term.open(container)
 
     const pageIsHttps = window.location.protocol === 'https:'
     const backendIsHttp = backendUrl.startsWith('http://')
@@ -876,15 +915,17 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
       term.writeln('')
       term.writeln('\x1b[36m>>> Fix: Set up Caddy as HTTPS reverse proxy on your VPS:\x1b[0m')
       term.writeln('\x1b[37m    apt install -y caddy\x1b[0m')
-      term.writeln('\x1b[37m    echo \'your-domain.com { reverse_proxy localhost:8000 }\' > /etc/caddy/Caddyfile\x1b[0m')
+      term.writeln("\x1b[37m    echo 'your-domain.com { reverse_proxy localhost:8000 }' > /etc/caddy/Caddyfile\x1b[0m")
       term.writeln('\x1b[37m    systemctl restart caddy\x1b[0m')
       term.writeln('')
       term.writeln('\x1b[36m>>> Or use your VPS IP directly with Caddy auto-TLS:\x1b[0m')
       term.writeln('\x1b[37m    apt install -y caddy\x1b[0m')
       term.writeln('\x1b[37m    caddy reverse-proxy --from :443 --to :8000\x1b[0m')
       term.writeln('\x1b[33m>>> Then change backend URL to: https://YOUR_VPS_IP\x1b[0m')
-      setConnectionError('Mixed content: HTTPS page cannot connect to HTTP backend. Set up HTTPS on your backend (see terminal for instructions).')
+      setConnectionError('Mixed content: HTTPS page cannot connect to HTTP backend.')
       setIsConnecting(false)
+      term.dispose()
+      container.remove()
       return
     }
 
@@ -892,18 +933,26 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
 
     const wsUrl = backendUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/ssh'
     const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
 
     let wsConnected = false
     const connectTimeout = setTimeout(() => {
       if (!wsConnected) {
         term.writeln('\x1b[31m>>> Connection timed out. Could not reach backend.\x1b[0m')
-        term.writeln('\x1b[33m>>> Check that the backend is running and port 8000 is open.\x1b[0m')
         setConnectionError('Connection timed out. Backend not reachable.')
         setIsConnecting(false)
         ws.close()
+        term.dispose()
+        container.remove()
       }
     }, 10000)
+
+    const session: TerminalSession = {
+      id: sessionId,
+      term,
+      fitAddon,
+      ws,
+      containerRef: container,
+    }
 
     ws.onopen = () => {
       wsConnected = true
@@ -930,7 +979,9 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             setHosts(prev => prev.map(h => h.id === activeHost.id ? { ...h, password } : h))
           }
           term.writeln('\x1b[32m>>> Connected! Terminal ready.\x1b[0m\r\n')
-          setTimeout(() => fitAddonRef.current?.fit(), 200)
+          setTerminalSessions(prev => [...prev, session])
+          setActiveSessionId(sessionId)
+          setTimeout(() => fitAddon.fit(), 200)
           term.onData((data) => {
             if (ctrlActiveRef.current && data.length === 1) {
               const code = data.toUpperCase().charCodeAt(0) - 64
@@ -967,32 +1018,81 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
 
     ws.onclose = () => {
       clearTimeout(connectTimeout)
-      setIsConnected(false)
-      setIsConnecting(false)
       term.writeln('\r\n\x1b[33m>>> Connection closed.\x1b[0m')
+      setTerminalSessions(prev => {
+        const remaining = prev.filter(s => s.id !== sessionId)
+        if (remaining.length === 0) {
+          setIsConnected(false)
+          setIsConnecting(false)
+          setActiveSessionId(null)
+        }
+        return remaining
+      })
+      setActiveSessionId(prev => {
+        if (prev === sessionId) {
+          const remaining = sessionsRef.current.filter(s => s.id !== sessionId)
+          return remaining.length > 0 ? remaining[remaining.length - 1].id : null
+        }
+        return prev
+      })
     }
-  }, [activeHost, password, privateKey, authMode, backendUrl, initTerminal])
+  }, [activeHost, password, privateKey, authMode, backendUrl])
+
+  // Close a specific terminal session
+  const closeTerminalSession = useCallback((sessionId: string) => {
+    const session = sessionsRef.current.find(s => s.id === sessionId)
+    if (session) {
+      session.ws.close()
+      session.term.dispose()
+      if (session.containerRef) {
+        session.containerRef.remove()
+      }
+    }
+    setTerminalSessions(prev => {
+      const remaining = prev.filter(s => s.id !== sessionId)
+      if (remaining.length === 0) {
+        setIsConnected(false)
+        setActiveSessionId(null)
+      }
+      return remaining
+    })
+    setActiveSessionId(prev => {
+      if (prev === sessionId) {
+        const remaining = sessionsRef.current.filter(s => s.id !== sessionId)
+        return remaining.length > 0 ? remaining[remaining.length - 1].id : null
+      }
+      return prev
+    })
+  }, [])
+
+  // Legacy connect (opens first terminal)
+  const connectSSH = openNewTerminal
 
   const disconnect = useCallback(() => {
-    wsRef.current?.close()
+    sessionsRef.current.forEach(s => {
+      s.ws.close()
+      s.term.dispose()
+      if (s.containerRef) s.containerRef.remove()
+    })
+    setTerminalSessions([])
+    setActiveSessionId(null)
     setIsConnected(false)
     setIsConnecting(false)
   }, [])
 
   const executeCommand = useCallback((script: string) => {
-    if (wsRef.current && isConnected) {
-      // Send Ctrl+C to break out of any running menu/prompt
-      wsRef.current.send(JSON.stringify({ type: 'input', data: '\x03' }))
+    const session = sessionsRef.current.find(s => s.id === activeSessionId)
+    if (session && isConnected) {
+      session.ws.send(JSON.stringify({ type: 'input', data: '\x03' }))
       setTimeout(() => {
-        wsRef.current?.send(JSON.stringify({ type: 'input', data: '\x03' }))
+        session.ws.send(JSON.stringify({ type: 'input', data: '\x03' }))
       }, 100)
-      // Wait, then execute the command
       setTimeout(() => {
-        wsRef.current?.send(JSON.stringify({ type: 'execute', data: script }))
+        session.ws.send(JSON.stringify({ type: 'execute', data: script }))
       }, 500)
       setConfirmTool(null)
     }
-  }, [isConnected])
+  }, [isConnected, activeSessionId])
 
   const addHost = () => {
     const host: SavedHost = {
@@ -1041,21 +1141,18 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={onBack}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors text-sm font-medium">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              className="p-2 rounded-lg hover:bg-slate-800/60 text-slate-400 hover:text-emerald-400 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Home
             </button>
             <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent">
-                One-Clicked VPS Setup
-              </h1>
-              <p className="text-xs text-slate-500 hidden sm:block">Connect & execute with one click</p>
+              <h1 className="text-base font-bold text-slate-100">One-Click VPS Setup</h1>
+              <p className="text-xs text-slate-500">SSH Terminal & File Manager</p>
             </div>
           </div>
-          <button onClick={() => setShowSettings(!showSettings)}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors">
+          <button onClick={() => setShowSettings(true)}
+            className="p-2 rounded-lg hover:bg-slate-800/60 text-slate-400 hover:text-emerald-400 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1239,11 +1336,22 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                     <p className="text-xs text-red-400">{connectionError}</p>
                   )}
 
-                  <button onClick={connectSSH}
-                    disabled={isConnecting || !backendUrl || (!password && !privateKey)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {isConnecting ? 'Connecting...' : 'Connect'}
-                  </button>
+                  {/* Split Connect Button: Terminal | File Manager */}
+                  <div className="flex rounded-lg overflow-hidden">
+                    <button onClick={connectSSH}
+                      disabled={isConnecting || !backendUrl || (!password && !privateKey)}
+                      className="flex-1 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      {isConnecting ? 'Connecting...' : 'Terminal'}
+                    </button>
+                    <div className="w-px bg-slate-900" />
+                    <button onClick={() => setShowFileManager(true)}
+                      disabled={isConnecting || !backendUrl || (!password && !privateKey)}
+                      className="flex-1 px-3 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-cyan-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                      File Manager
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1254,9 +1362,22 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                     <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <p className="text-xs font-semibold text-emerald-400">Connected to {activeHost.label}</p>
                   </div>
+                  <div className="flex gap-2 mb-2">
+                    <button onClick={openNewTerminal}
+                      disabled={terminalSessions.length >= MAX_TERMINAL_WINDOWS}
+                      className="flex-1 px-2 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      New Terminal ({terminalSessions.length}/{MAX_TERMINAL_WINDOWS})
+                    </button>
+                    <button onClick={() => setShowFileManager(true)}
+                      className="flex-1 px-2 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-semibold hover:bg-cyan-500/20 transition-colors flex items-center justify-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                      File Manager
+                    </button>
+                  </div>
                   <button onClick={disconnect}
                     className="w-full px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors border border-red-500/20">
-                    Disconnect
+                    Disconnect All
                   </button>
                 </div>
               )}
@@ -1266,6 +1387,31 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
           {/* MIDDLE/RIGHT: Terminal + Tools */}
           <div className="lg:col-span-9 space-y-6">
 
+            {/* Terminal Window Tabs */}
+            {terminalSessions.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {terminalSessions.map((session, idx) => (
+                  <div key={session.id}
+                    className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all flex-shrink-0 ${
+                      activeSessionId === session.id
+                        ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-400'
+                        : 'bg-slate-800/60 border border-slate-700/40 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                    }`}
+                    onClick={() => setActiveSessionId(session.id)}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-xs font-medium">Terminal {idx + 1}</span>
+                    <button onClick={(e) => { e.stopPropagation(); closeTerminalSession(session.id) }}
+                      className="ml-1 p-0.5 rounded hover:bg-red-500/20 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                      title="Close terminal">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Terminal Status Card */}
             <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800/60 flex items-center gap-2">
@@ -1274,16 +1420,24 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                   <div className="w-3 h-3 rounded-full bg-amber-500/60" />
                   <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
                 </div>
-                <span className="text-xs font-mono text-slate-500 ml-2">terminal</span>
+                <span className="text-xs font-mono text-slate-500 ml-2">
+                  {activeSession ? `terminal ${terminalSessions.indexOf(activeSession) + 1}` : 'terminal'}
+                </span>
+                {isConnected && activeSession && (
+                  <button onClick={() => setIsFullscreen(true)}
+                    className="ml-auto p-1 rounded-md hover:bg-slate-800 text-slate-500 hover:text-emerald-400 transition-colors" title="Fullscreen">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                  </button>
+                )}
               </div>
               <div className="bg-[#0B1222] p-6">
-                {isConnected && activeHost ? (
+                {isConnected && activeSession ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
                       <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
                     </div>
                     <p className="text-emerald-400 text-sm font-semibold mb-1">Successfully Connected</p>
-                    <p className="text-slate-400 text-xs font-mono mb-6">{activeHost.username}@{activeHost.host}:{activeHost.port}</p>
+                    <p className="text-slate-400 text-xs font-mono mb-6">{activeHost?.username}@{activeHost?.host}:{activeHost?.port}</p>
                     <button onClick={() => setIsFullscreen(true)}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-sm hover:shadow-lg hover:shadow-emerald-500/20 transition-all">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
@@ -1350,14 +1504,13 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
               </div>
 
               <div className="p-3 space-y-4 max-h-[500px] overflow-y-auto">
-                {/* OS Rebuild Section — category → version drill-down */}
+                {/* OS Rebuild Section */}
                 {(!selectedCategory || selectedCategory === 'os-rebuild') && (
                   <div>
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                       <span>{'\u{1F4BF}'}</span> OS Rebuild
                     </h3>
                     {!selectedOS ? (
-                      /* Show OS category cards */
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {osGroups
                           .filter(os => !toolSearch || os.name.toLowerCase().includes(toolSearch.toLowerCase()) || os.description.toLowerCase().includes(toolSearch.toLowerCase()))
@@ -1374,7 +1527,6 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                         ))}
                       </div>
                     ) : (
-                      /* Show versions of selected OS */
                       (() => {
                         const os = osGroups.find(o => o.id === selectedOS)
                         if (!os) return null
@@ -1434,7 +1586,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                     )}
                   </div>
                 )}
-                {/* Other tool categories (non-OS-rebuild) */}
+                {/* Other tool categories */}
                 {filteredTools.filter(cat => cat.id !== 'os-rebuild').map((cat) => (
                   <div key={cat.id}>
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -1476,8 +1628,26 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
         <div className="fixed inset-0 z-[60] bg-[#0B1222] flex flex-col">
           {/* Fullscreen header bar */}
           <div className="flex items-center justify-between px-2 py-1.5 bg-slate-900/95 border-b border-slate-800/40 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Terminal window tabs in fullscreen */}
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {terminalSessions.map((session, idx) => (
+                  <div key={session.id}
+                    onClick={() => setActiveSessionId(session.id)}
+                    className={`relative flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all cursor-pointer ${
+                      activeSessionId === session.id
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                    }`}>
+                    T{idx + 1}
+                    <button onClick={(e) => { e.stopPropagation(); closeTerminalSession(session.id) }}
+                      className="ml-0.5 p-0.5 rounded hover:bg-red-500/20 hover:text-red-400 transition-colors">
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="w-px h-4 bg-slate-700 mx-1" />
               <span className="text-xs font-mono text-slate-400 truncate max-w-[200px]">
                 {activeHost ? `${activeHost.username}@${activeHost.host}` : 'terminal'}
               </span>
@@ -1529,46 +1699,12 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
                 className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium whitespace-nowrap transition-colors active:bg-emerald-500/30 flex-shrink-0">
                 Tab
               </button>
-              <button onClick={() => sendSpecialKey('-')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                -
-              </button>
-              <button onClick={() => sendSpecialKey('/')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                /
-              </button>
-              <button onClick={() => sendSpecialKey('|')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                |
-              </button>
-              <button onClick={() => sendSpecialKey('\\')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                \
-              </button>
-              <button onClick={() => sendSpecialKey('~')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                ~
-              </button>
-              <button onClick={() => sendSpecialKey('_')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                _
-              </button>
-              <button onClick={() => sendSpecialKey(':')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                :
-              </button>
-              <button onClick={() => sendSpecialKey(';')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                ;
-              </button>
-              <button onClick={() => sendSpecialKey('@')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                @
-              </button>
-              <button onClick={() => sendSpecialKey('&')}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
-                &amp;
-              </button>
+              {['-', '/', '|', '\\', '~', '_', ':', ';', '@', '&'].map((ch) => (
+                <button key={ch} onClick={() => sendSpecialKey(ch)}
+                  className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors active:bg-emerald-500/30 flex-shrink-0">
+                  {ch === '&' ? '\u0026' : ch}
+                </button>
+              ))}
               {/* Close keyboard button */}
               <button onClick={() => setShowKeyboard(false)}
                 className="px-2.5 py-2 rounded-lg bg-red-900/50 hover:bg-red-800/50 text-red-300 text-xs font-bold transition-colors active:bg-red-500/30 flex-shrink-0 ml-auto"
@@ -1620,7 +1756,7 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
           )}
 
-          {/* Select Text Overlay - shows terminal buffer as selectable text */}
+          {/* Select Text Overlay */}
           {showSelectText && (
             <div className="absolute inset-0 z-10 bg-black/90 flex flex-col">
               <div className="flex items-center justify-between px-3 py-2 bg-slate-900 border-b border-slate-800/40">
@@ -1761,6 +1897,20 @@ export default function SetupPage({ onBack }: { onBack: () => void }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* File Manager Overlay */}
+      {showFileManager && activeHost && (
+        <FileManager
+          backendUrl={backendUrl}
+          host={activeHost.host}
+          port={activeHost.port}
+          username={activeHost.username}
+          password={password}
+          privateKey={privateKey}
+          authMode={authMode}
+          onClose={() => setShowFileManager(false)}
+        />
       )}
     </div>
   )
